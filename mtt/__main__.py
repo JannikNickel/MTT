@@ -10,6 +10,7 @@ from . import transmart
 from . import transform
 from . import num_str_utils
 from . import T
+from . import tm_upload
 
 #Switch console mode to allo ansi escape sequences on windows
 if os.name == "nt":
@@ -71,4 +72,12 @@ tm_procedures = T.create_procedures_data(mimic_tables, hadm_to_subj, hadm_to_vis
 # Export                                                                      #
 ###############################################################################
 log(">>> Export")
-transmart.export_study([tm_patients, tm_admissions, tm_diagnoses, tm_procedures], mimic_tables)
+rel_export_path = transmart.export_study([tm_patients, tm_admissions, tm_diagnoses, tm_procedures], mimic_tables)
+
+###############################################################################
+# Upload                                                                      #
+###############################################################################
+log(">>> Do you want to upload the dataset to transmart? [y/n]")
+upload_answer = input()
+if upload_answer == "Y" or upload_answer == "y":
+    tm_upload.upload_data(rel_export_path)

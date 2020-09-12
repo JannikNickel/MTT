@@ -15,7 +15,8 @@ visitname_placeholder = "VISITNAME"
 data_label_placeholder = "DATA_LABEL"
 
 def export_study(clinical_tables, mimic_tables):
-    path = cfg.getcwd() + cfg.output_path + cfg.study_id + "/"
+    rel_path = cfg.output_path + cfg.study_id + "/"
+    path = cfg.getcwd() + rel_path
 
     #Delete old study folder
     if os.path.exists(path):
@@ -34,13 +35,16 @@ def export_study(clinical_tables, mimic_tables):
     study_file.write_to(path + "backout.params")#backout is exactly like study.params, so just write the file twice
 
     #Create clinical data
-    export_clinical(path, clinical_tables, mimic_tables)
+    export_clinical(rel_path, clinical_tables, mimic_tables)
+
+    #Return relative export path from the output directory
+    return rel_path.replace(cfg.output_path, "")
 
 
 def export_clinical(path, clinical_tables, mimic_tables):
     clinical_path = path + "clinical/"
-    clinical_map_file = clinical_path + "clinical_map" + file_ending
-    clinical_word_map_file = clinical_path + "clinical_word_map" + file_ending
+    clinical_map_file = "clinical_map" + file_ending
+    clinical_word_map_file = "clinical_word_map" + file_ending
 
     #Create clinical.params file
     clinical_file = params_file()
@@ -64,7 +68,7 @@ def export_clinical(path, clinical_tables, mimic_tables):
     #Create and store mapping file + adjust data tables
     log_progress_bar(0.2)
     mapping = create_clinical_mapping(clinical_tables)
-    mapping.store(clinical_map_file, file_delimiter)
+    mapping.store(clinical_path + clinical_map_file, file_delimiter)
 
     #Store data tables
     log_progress_bar(0.4)
@@ -74,7 +78,7 @@ def export_clinical(path, clinical_tables, mimic_tables):
 
     #Create word map file
     word_map = create_word_map(clinical_tables, mimic_tables)
-    word_map.store(clinical_word_map_file)
+    word_map.store(clinical_path + clinical_word_map_file, file_delimiter)
 
     log_progress_bar(1.0)
 
