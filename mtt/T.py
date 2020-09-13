@@ -108,3 +108,5 @@ def create_diagnoses_data(mimic_tables, hadm_to_subj, hadm_to_visit):
 def create_procedures_data(mimic_tables, hadm_to_subj, hadm_to_visit):
     return create_icd_table(mimic_tables["PROCEDURES_ICD"], hadm_to_visit, "tm_procedures", f"Subjects+Hospital_Stays+{visit_name_path}+Medical+Procedures", lambda x: f"{x:02}{num_str_utils.number_ordinal(x)}")
 
+def create_observations(mimic_tables, hadm_to_subj, hadm_to_visit):
+    pass
