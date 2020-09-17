@@ -13,5 +13,8 @@ study_top_node = "\\Public Studies\\" + study_id
 docker_path = r"/home/cloud/tm_umg/"                                                #Path to the docker version of tranSMART
 incoming_data_path = r"/var/lib/docker/volumes/tm_umg_tm_opt/_data/data/incoming/"  #Path to the incoming study data path (Needs write permission, parent dir also needs write permission)
 
+#Data settings
+first_visit_only = True
+
 def getcwd():
     return os.getcwd() + "/"

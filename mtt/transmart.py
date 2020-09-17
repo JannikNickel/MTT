@@ -26,6 +26,9 @@ def export_study(clinical_tables, mimic_tables):
     if not os.path.exists(path):
         os.makedirs(path)
 
+    #Reduce dataset to improve import speed
+    reduce_dataset(clinical_tables)
+
     #Create study definition file and backout.params
     study_file = params_file()
     study_file["STUDY_ID"] = cfg.study_id
@@ -49,6 +52,19 @@ def export_study(clinical_tables, mimic_tables):
 
     #Return relative export path from the output directory
     return rel_path.replace(cfg.output_path, "")
+
+
+def reduce_dataset(tables):
+    if cfg.first_visit_only == True:
+        log("Reducing dataset (first_visit_only)")
+    for t in tables:
+        #Remove all visits != first
+        if cfg.first_visit_only == True:
+            vn_index = t.column_index("VISIT_NAME")
+            if vn_index != -1:
+                for row in range(t.row_count - 1, -1, -1):
+                    if int(t[vn_index, row]) > 1:
+                        t.remove_row(row)
 
 
 def split_clinical_tables(src_tables):
@@ -330,7 +346,7 @@ class tm_column_md():
     def type(self):
         return self._tmtype
 
-    def get_cell_meta(self, row) -> tm_cell_md:
+    def get_cell_meta(self, row: int) -> tm_cell_md:
         if row < len(self._cell_meta):
             return self._cell_meta[row]
         return None
@@ -339,3 +355,7 @@ class tm_column_md():
         while row >= len(self._cell_meta):
             self._cell_meta.append(None)
         self._cell_meta[row] = data
+
+    def removed_row(self, row: int):
+        if row < len(self._cell_meta):
+            del self._cell_meta[row]

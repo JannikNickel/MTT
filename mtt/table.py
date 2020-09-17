@@ -99,6 +99,12 @@ class table():
     def remove_row(self, index):
         del self._data[index]
         self._row_count -= 1
+        for c in self._columns:
+            if c.meta != None:
+                try:
+                    c.meta.removed_row(index)
+                except:
+                    pass
 
     #Queries
     def where_value(self, column, value):
