@@ -50,15 +50,6 @@ class table():
         ci = self.column_index(column_name)
         return self._data[row_index][ci]
 
-    #Removed meta data because class creation is way too slow in python. If this is required, add a secondary data array
-    #def get_meta(self, column_name, row_index):
-    #    ci = self.column_index(column_name)
-    #    return self._data[row_index][ci].meta
-
-    #def set_meta(self, column_name, row_index, meta):
-    #    ci = self.column_index(column_name)
-    #    self._data[row_index][ci].meta = meta
-
     def column_index(self, column_name):
         for i in range(self._column_count):
             if self._columns[i].name == column_name:
@@ -73,6 +64,9 @@ class table():
         if ci == -1:
             return None
         return self._columns[ci].meta
+
+    def has_column(self, column_name):
+        return self.column_index(column_name) != -1
 
     #Modify shape
     def add_column(self, column_name, column_meta=None):

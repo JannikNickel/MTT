@@ -5,6 +5,9 @@ from . import mimic
 from . import transmart
 from . import transform
 from . import num_str_utils
+from . import mimic_items
+
+import datetime as dt
 
 #Settings
 visit_name_path = "Visit_" + transmart.visitname_placeholder
@@ -98,7 +101,7 @@ def create_icd_table(mimic_table, hadm_to_visit, table_name, category_path, num_
         seq_num = int(mimic_table.get("seq_num", i))
         tm_table.add_row([mimic_table.get("subject_id", i), str(hadm_to_visit[mimic_table.get("hadm_id", i)]), mimic_table.get("icd9_code", i)])
         sequence = num_to_str_func(seq_num)
-        meta.set_cell_meta(i, sequence)
+        meta.set_cell_meta(i, transmart.tm_cell_md(sequence))
 
     return tm_table
 
@@ -108,5 +111,84 @@ def create_diagnoses_data(mimic_tables, hadm_to_subj, hadm_to_visit):
 def create_procedures_data(mimic_tables, hadm_to_subj, hadm_to_visit):
     return create_icd_table(mimic_tables["PROCEDURES_ICD"], hadm_to_visit, "tm_procedures", f"Subjects+Hospital_Stays+{visit_name_path}+Medical+Procedures", lambda x: f"{x:02}{num_str_utils.number_ordinal(x)}")
 
-def create_observations(mimic_tables, hadm_to_subj, hadm_to_visit):
-    pass
+def create_observations_data(mimic_tables, hadm_to_subj, hadm_to_visit):
+    m_chart = mimic_tables["CHARTEVENTS"]
+    tm_observation_tables = []
+
+    #GROUP by mapped item ids (MIMIC-III id -> tranSMART target name)
+    map_id_to_target = lambda id: (
+        filtered := [x for x in mimic_items.observation_items if x.id == id],
+        filtered[0].target if len(filtered) > 0 else "Unmapped"
+    )[-1]
+    item_groups = m_chart.group_by("itemid", lambda x: map_id_to_target(x))
+    item_groups.pop("Unmapped", None)#Remove unmapped data
+
+    #Iterate through target items
+    for item_key in item_groups:
+        first_item_def = [x for x in mimic_items.observation_items if x.target == item_key][0]
+
+        #Create a table for this item group
+        item_table = table("tm_observation_" + item_key)
+        item_table.add_column("SUBJ_ID")
+        item_table.add_column("VISIT_NAME")
+        tmtype = transmart.tm_type.NUMERICAL if first_item_def.numeric else transmart.tm_type.CATEGORICAL
+        item_table.add_column("value", transmart.tm_column_md(f"Subjects+Hospital_Stays+{visit_name_path}+Medical+Observations+{item_key}", tmtype))
+        #TODO date with special placeholder
+        tm_observation_tables.append(item_table)
+        column_meta = item_table.column_meta("value")
+
+        #GROUP the rows of this item group by hospital admissions
+        hadm_groups = m_chart.group_by("hadm_id", func=None, limited_rows=item_groups[item_key])
+
+        #Iterate through all hospital admissions
+        for h_key, h_rows in hadm_groups.items():
+            subj_id = m_chart.get("subject_id", h_rows[0])
+            hadm_id = m_chart.get("hadm_id", h_rows[0])
+            item_id = m_chart.get("itemid", h_rows[0])
+            item_def = [x for x in mimic_items.observation_items if x.id == item_id][0]
+
+            #Iterate through each item entry for this hospital admission and load the data
+            i = 0#Count number for each entry as metadata
+            for row in h_rows:
+                value = m_chart.get(item_def.source, row)
+                datetime = None
+
+                #Skip null values
+                if value == "":
+                    continue
+
+                #Cast numeric values and skip non numeric values in numeric variables
+                if item_def.numeric == True:
+                    try:
+                        value = float(value)
+                    except ValueError:
+                        continue
+
+                #Modify item based on a given function
+                if item_def.modifier != None:
+                    value = item_def.modifier(value)
+
+                #Skip out of bounds numeric values
+                if item_def.numeric == True and item_def.limits != None:
+                    if value < item_def.limits[0] or value > item_def.limits[1]:
+                        continue
+                
+                #Normalize and skip certain categorical values
+                if item_def.numeric == False:
+                    value = value.title()
+                    if value == "Other/Remarks":
+                        continue
+
+                #Extract datetime (charttime is most accurate)
+                datetime = m_chart.get("charttime", row)
+                try:
+                    datetime = dt.datetime.strptime(datetime, mimic.time_format)
+                except ValueError:
+                    continue#Skip entries with invalid times
+                
+                #Add row and set entry number as metadata
+                item_table.add_row([subj_id, hadm_to_visit[hadm_id], value])
+                column_meta.set_cell_meta(item_table.row_count - 1, transmart.tm_cell_md(f"{i:06}", datetime))
+                i += 1
+
+    return tm_observation_tables

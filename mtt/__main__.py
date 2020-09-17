@@ -59,20 +59,29 @@ for i in range(mimic_tables["ADMISSIONS"].row_count):
 log(">>> Transform")
 
 #Patient data
+log("Patient data")
 tm_patients = T.create_patients_data(mimic_tables, hadm_to_subj, hadm_to_visit)
 
 #Admissions data
+log("Admissions data")
 tm_admissions = T.create_admissions_data(mimic_tables, hadm_to_subj, hadm_to_visit)
 
 #Diagnoses/Procedures data
+log("Diagnoses/Procedures data")
 tm_diagnoses = T.create_diagnoses_data(mimic_tables, hadm_to_subj, hadm_to_visit)
 tm_procedures = T.create_procedures_data(mimic_tables, hadm_to_subj, hadm_to_visit)
+
+#Observation data
+log("Observation data")
+tm_observations = T.create_observations_data(mimic_tables, hadm_to_subj, hadm_to_visit)
 
 ###############################################################################
 # Export                                                                      #
 ###############################################################################
 log(">>> Export")
-rel_export_path = transmart.export_study([tm_patients, tm_admissions, tm_diagnoses, tm_procedures], mimic_tables)
+tm_tables = [tm_patients, tm_admissions, tm_diagnoses, tm_procedures]
+tm_tables += tm_observations
+rel_export_path = transmart.export_study(tm_tables, mimic_tables)
 
 ###############################################################################
 # Upload                                                                      #

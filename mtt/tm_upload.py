@@ -40,7 +40,7 @@ def upload_data(study_path):
     stdin, stdout, stderr = client.exec_command(cd_docker_cmd + remove_old_data_cmd, get_pty=True)
     for line in stdout:#Wait for EOF
         l = line.strip("\n")
-        print(l)
+        print("\033[90m" + l + "\033[0m")
 
     time.sleep(0.5)
 

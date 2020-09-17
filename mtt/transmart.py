@@ -34,11 +34,34 @@ def export_study(clinical_tables, mimic_tables):
     study_file.write_to(path + "study.params")
     study_file.write_to(path + "backout.params")#backout is exactly like study.params, so just write the file twice
 
+    #Split clinical and timeseries data (HDD)
+    clinical_tables, hdd_tables = split_clinical_tables(clinical_tables)
+
     #Create clinical data
     export_clinical(rel_path, clinical_tables, mimic_tables)
 
+    #Create platform
+    export_platform(rel_path, "ICU", "ICU timeseries data about patients")
+
+    #Create highdimensional data
+    export_hdd(rel_path, hdd_tables)
+
     #Return relative export path from the output directory
     return rel_path.replace(cfg.output_path, "")
+
+
+def split_clinical_tables(src_tables):
+    clinical = src_tables
+    hdd = []
+
+    for i in range(len(src_tables) - 1, -1, -1):
+        table = clinical[i]
+        #Target tables are in the format | SUBJ_ID | VISIT_NAME | value |
+        if table.column_count == 3 and table.has_column("value") and table.column_meta("value").type == tm_type.NUMERICAL:
+            del clinical[i]
+            hdd.append(table)
+
+    return (clinical, hdd)
 
 
 def export_clinical(path, clinical_tables, mimic_tables):
@@ -118,7 +141,7 @@ def create_clinical_mapping(clinical_tables) -> table:
                 t.add_row([file_name, "", new_column_index, data_label_placeholder, "", "", ""])
                 #Insert label column to the data table
                 src.insert_column(new_column_index - 1, new_column_name)
-                src.fill_column_array(new_column_name, [(column_meta.get_cell_meta(row) if column_meta.get_cell_meta(row) != "" else column_name) for row in range(src.row_count)])
+                src.fill_column_array(new_column_name, [(column_meta.get_cell_meta(row).seq_num if column_meta.get_cell_meta(row) != None else column_name) for row in range(src.row_count)])
                 src_column_count += 1
                 i += 1
                 new_column_index += 1
@@ -141,7 +164,6 @@ def create_word_map(clinical_tables, mimic_tables):
     tm_word_map_table.add_column("column")
     tm_word_map_table.add_column("from")
     tm_word_map_table.add_column("to")
-
 
     #Add diagnoses to word map
     try:
@@ -169,8 +191,58 @@ def create_word_map(clinical_tables, mimic_tables):
 
     return tm_word_map_table
 
+def export_platform(path, name, title):
+    organsism = "Homo Sapiens"
+    platform_file_name = "mrna_annotation"
+    platform_path = path + platform_file_name + "/"
 
-#TODO methods to define platforms and to create HDD data
+    #Create platform definition file
+    tm_platform = params_file()
+    tm_platform["PLATFORM"] = name
+    tm_platform["TITLE"] = title
+    tm_platform["ANNOTATIONS_FILE"] = name + ".txt"
+    tm_platform["ORGANISM"] = organsism
+    tm_platform.write_to(path + platform_file_name + ".params")
+
+    #Create platform folder
+    if not os.path.exists(platform_path):
+        os.makedirs(platform_path)
+
+    #Create platform examination definition table
+    tm_platform_table = table(name)
+    tm_platform_table.add_column("GPL_ID")
+    tm_platform_table.add_column("PROBE_NAME")
+    tm_platform_table.add_column("GENES")
+    tm_platform_table.add_column("ENTREZ_ID")
+    tm_platform_table.add_column("ORGANISM")
+
+    #For now, only define one numeric measurement: measurement
+    #For categorical data, define one measurement for each character: C1, C2, ...
+    tm_platform_table.add_row([name, "measurement", "", "", organsism])
+
+    #Store platform definition table
+    tm_platform_table.store(platform_path + name + ".txt", file_delimiter)
+
+def export_hdd(path, hdd_tables):
+    hdd_folder_path = path + "expression/"
+    #Create hdd folder
+    if not os.path.exists(hdd_folder_path):
+        os.makedirs(hdd_folder_path)
+
+    #Create subject sample mapping table
+    ssm_table = table("SubjectSampleMapping")
+    ssm_table.add_column("STUDY_ID")
+    ssm_table.add_column("SITE_ID")
+    ssm_table.add_column("SUBJECT_ID")
+    ssm_table.add_column("SAMPLE_CD")
+    ssm_table.add_column("PLATFORM")
+    ssm_table.add_column("SAMPLE_TYPE")
+    ssm_table.add_column("TISSUE_TYPE")
+    ssm_table.add_column("TIME_POINT")
+    ssm_table.add_column("CATEGORY_CD")
+    ssm_table.add_column("SOURCE_CD")
+
+    
 
 class tm_type(Enum):
     NONE = 0,
@@ -189,11 +261,17 @@ class tm_type(Enum):
         elif tmtype == tm_type.TIME:
             return ""
 
+class tm_cell_md:
+    __slots__ = ["seq_num", "datetime"]
+    def __init__(self, seq_num=None, datetime=None):
+        self.seq_num = seq_num
+        self.datetime = datetime
+
 class tm_column_md():
     def __init__(self, category, tmtype=tm_type.NONE):
         self._category = category
         self._tmtype = tmtype
-        #Used for sequence_id (kinda legacy now)
+        #Used for sequence_id and datetime
         self._cell_meta = []
 
     @property
@@ -204,12 +282,12 @@ class tm_column_md():
     def type(self):
         return self._tmtype
 
-    def get_cell_meta(self, row):
+    def get_cell_meta(self, row) -> tm_cell_md:
         if row < len(self._cell_meta):
             return self._cell_meta[row]
-        return ""
+        return None
 
-    def set_cell_meta(self, row, data):
+    def set_cell_meta(self, row: int, data: tm_cell_md):
         while row >= len(self._cell_meta):
-            self._cell_meta.append("")
+            self._cell_meta.append(None)
         self._cell_meta[row] = data
