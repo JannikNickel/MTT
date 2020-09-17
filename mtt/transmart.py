@@ -41,10 +41,11 @@ def export_study(clinical_tables, mimic_tables):
     export_clinical(rel_path, clinical_tables, mimic_tables)
 
     #Create platform
-    export_platform(rel_path, "ICU", "ICU timeseries data about patients")
+    platform_name = "ICU"
+    export_platform(rel_path, platform_name, "ICU timeseries data about patients")
 
     #Create highdimensional data
-    export_hdd(rel_path, hdd_tables)
+    export_hdd(rel_path, hdd_tables, platform_name)
 
     #Return relative export path from the output directory
     return rel_path.replace(cfg.output_path, "")
@@ -57,6 +58,7 @@ def split_clinical_tables(src_tables):
     for i in range(len(src_tables) - 1, -1, -1):
         table = clinical[i]
         #Target tables are in the format | SUBJ_ID | VISIT_NAME | value |
+        #TODO and all meta cells contain a datetime
         if table.column_count == 3 and table.has_column("value") and table.column_meta("value").type == tm_type.NUMERICAL:
             del clinical[i]
             hdd.append(table)
@@ -223,26 +225,72 @@ def export_platform(path, name, title):
     #Store platform definition table
     tm_platform_table.store(platform_path + name + ".txt", file_delimiter)
 
-def export_hdd(path, hdd_tables):
+def export_hdd(path, hdd_tables, platform_name):
     hdd_folder_path = path + "expression/"
+    map_file_name = "subjectsamplemapping"
+    map_file_path = hdd_folder_path + map_file_name + file_ending
+    data_file_name = "data"
+    data_file_path = hdd_folder_path + data_file_name + file_ending
+
     #Create hdd folder
     if not os.path.exists(hdd_folder_path):
         os.makedirs(hdd_folder_path)
 
-    #Create subject sample mapping table
-    ssm_table = table("SubjectSampleMapping")
-    ssm_table.add_column("STUDY_ID")
-    ssm_table.add_column("SITE_ID")
-    ssm_table.add_column("SUBJECT_ID")
-    ssm_table.add_column("SAMPLE_CD")
-    ssm_table.add_column("PLATFORM")
-    ssm_table.add_column("SAMPLE_TYPE")
-    ssm_table.add_column("TISSUE_TYPE")
-    ssm_table.add_column("TIME_POINT")
-    ssm_table.add_column("CATEGORY_CD")
-    ssm_table.add_column("SOURCE_CD")
+    #Create HDD params file
+    hdd_params = params_file()
+    hdd_params["DATA_FILE"] = data_file_name + file_ending
+    hdd_params["MAP_FILENAME"] = map_file_name + file_ending
+    hdd_params["DATA_TYPE"] = "R"
+    hdd_params["ALLOW_MISSING_ANNOTATIONS"] = "Y"
+    hdd_params["SKIP_UNMAPPED_DATA"] = "N"
+    hdd_params["ZERO_MEANS_NO_INFO"] = "N"
+    hdd_params.write_to(path + "expression" + ".params")
 
-    
+    #Create subject sample mapping table
+    map_table = table(map_file_name)
+    map_table.add_column("STUDY_ID")
+    map_table.add_column("SITE_ID")
+    map_table.add_column("SUBJECT_ID")
+    map_table.add_column("SAMPLE_CD")
+    map_table.add_column("PLATFORM")
+    map_table.add_column("SAMPLE_TYPE")
+    map_table.add_column("TISSUE_TYPE")
+    map_table.add_column("TIME_POINT")
+    map_table.add_column("CATEGORY_CD")
+    map_table.add_column("SOURCE_CD")
+
+    #Create data table
+    data_table = table(data_file_name)
+    data_table.add_column("ID_REF")
+    data_table.add_row(["measurement"])#Default numeric probe
+
+    for t in hdd_tables:
+        subject_id_index = t.column_index("SUBJ_ID")
+        visit_name_index = t.column_index("VISIT_NAME")
+        value_index = t.column_index("value")
+        value_meta = t.column_meta("value")
+        subj_id_dict = {}
+        for row in range(t.row_count):
+            #Create sample
+            subject = t[subject_id_index, row]
+            if not subject in subj_id_dict:
+                subj_id_dict[subject] = 0
+
+            cd = value_meta.category.replace(visitname_placeholder, t[visit_name_index, row])#Replace visit name placeholder by value
+            sample_id = f"{t.name}_S{subject}_S{subj_id_dict[subject]}"
+            map_table.add_row([cfg.study_id, "", subject, sample_id, platform_name, "", "", str(value_meta.get_cell_meta(row).datetime), cd, ""])
+
+            subj_id_dict[subject] += 1
+
+            #Fill data
+            value = t[value_index, row]
+            data_table.add_column(sample_id)
+            data_table[data_table.column_count - 1, 0] = value
+
+    #Save tables
+    map_table.store(map_file_path, file_delimiter)
+    data_table.store(data_file_path, file_delimiter)
+
 
 class tm_type(Enum):
     NONE = 0,

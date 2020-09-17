@@ -53,6 +53,7 @@ def upload_data(study_path):
     sftp.close()
 
     #Display import log
+    t_import_start = time.time()
     log("Displaying tmbatch log...", log_type.INFO)
     stdin, stdout, stderr = client.exec_command(cd_docker_cmd + "docker-compose logs -f --tail 0 tmbatch")
     for line in stdout:#Wait for EOF
@@ -62,3 +63,6 @@ def upload_data(study_path):
             break
 
     client.close()
+
+    t_import_end = time.time()
+    log(f"Import time: {(t_import_end - t_import_start)}s")
