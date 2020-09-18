@@ -237,6 +237,9 @@ def export_platform(path, name, title):
     #For now, only define one numeric measurement: measurement
     #For categorical data, define one measurement for each character: C1, C2, ...
     tm_platform_table.add_row([name, "measurement", "", "", organsism])
+    max_str_len = 64
+    for i in range(max_str_len):
+        tm_platform_table.add_row([name, f"char_{i}", "", "", organsism])
 
     #Store platform definition table
     tm_platform_table.store(platform_path + name + ".txt", file_delimiter)
@@ -259,7 +262,7 @@ def export_hdd(path, hdd_tables, platform_name):
     hdd_params["DATA_TYPE"] = "R"
     hdd_params["ALLOW_MISSING_ANNOTATIONS"] = "Y"
     hdd_params["SKIP_UNMAPPED_DATA"] = "N"
-    hdd_params["ZERO_MEANS_NO_INFO"] = "N"
+    hdd_params["ZERO_MEANS_NO_INFO"] = "N"  #This can be set to Y and 0 will not be inserted in the database. Just using -1 as a value have the same effect!
     hdd_params.write_to(path + "expression" + ".params")
 
     #Create subject sample mapping table
@@ -279,6 +282,10 @@ def export_hdd(path, hdd_tables, platform_name):
     data_table = table(data_file_name)
     data_table.add_column("ID_REF")
     data_table.add_row(["measurement"])#Default numeric probe
+    #Categorical probe
+    max_str_len = 64
+    for i in range(max_str_len):
+        data_table.add_row([f"char_{i}"])
 
     for t in hdd_tables:
         subject_id_index = t.column_index("SUBJ_ID")
@@ -302,6 +309,10 @@ def export_hdd(path, hdd_tables, platform_name):
             value = t[value_index, row]
             data_table.add_column(sample_id)
             data_table[data_table.column_count - 1, 0] = value
+
+            #Fill categorical data with null (= -1)
+            for i in range(1, max_str_len + 1):
+                data_table[data_table.column_count - 1, i] = str(-1)
 
     #Save tables
     map_table.store(map_file_path, file_delimiter)
