@@ -1,5 +1,5 @@
 from . import config as cfg
-from .log import log, log_type
+from .log import log, log_type, log_with_percent
 from .table import table
 from . import mimic
 from . import transmart
@@ -13,6 +13,7 @@ import datetime as dt
 visit_name_path = "Visit_" + transmart.visitname_placeholder
 
 def create_patients_data(mimic_tables, hadm_to_subj, hadm_to_visit):
+    log("Patient data")
     #Table definition
     tm_patients = table("tm_patients")
     tm_patients.add_column("STUDY_ID")
@@ -32,6 +33,7 @@ def create_patients_data(mimic_tables, hadm_to_subj, hadm_to_visit):
     return tm_patients
 
 def create_admissions_data(mimic_tables, hadm_to_subj, hadm_to_visit):
+    log("Admissions data")
     #Table definition
     tm_admissions = table("tm_admissions")
     tm_admissions.add_column("STUDY_ID")
@@ -106,12 +108,15 @@ def create_icd_table(mimic_table, hadm_to_visit, table_name, category_path, num_
     return tm_table
 
 def create_diagnoses_data(mimic_tables, hadm_to_subj, hadm_to_visit):
+    log("Diagnoses data")
     return create_icd_table(mimic_tables["DIAGNOSES_ICD"], hadm_to_visit, "tm_diagnoses", f"Subjects+Hospital_Stays+{visit_name_path}+Medical+Diagnoses", lambda x: f"{x:02}" + (f" ({num_str_utils.number_importance(x)})" if num_str_utils.number_importance(x) != "" else ""))
 
 def create_procedures_data(mimic_tables, hadm_to_subj, hadm_to_visit):
+    log("Procedures data")
     return create_icd_table(mimic_tables["PROCEDURES_ICD"], hadm_to_visit, "tm_procedures", f"Subjects+Hospital_Stays+{visit_name_path}+Medical+Procedures", lambda x: f"{x:02}{num_str_utils.number_ordinal(x)}")
 
 def create_observations_data(mimic_tables, hadm_to_subj, hadm_to_visit):
+    log_with_percent("Observation data", 0.0)
     m_chart = mimic_tables["CHARTEVENTS"]
     tm_observation_tables = []
 
@@ -124,7 +129,11 @@ def create_observations_data(mimic_tables, hadm_to_subj, hadm_to_visit):
     item_groups.pop("Unmapped", None)#Remove unmapped data
 
     #Iterate through target items
+    group_progress = 0
     for item_key in item_groups:
+        group_progress += 1
+        log_with_percent("Observation data", min((group_progress / float(len(item_groups))), 0.999))
+
         first_item_def = [x for x in mimic_items.observation_items if x.target == item_key][0]
 
         #Create a table for this item group
@@ -191,4 +200,5 @@ def create_observations_data(mimic_tables, hadm_to_subj, hadm_to_visit):
                 column_meta.set_cell_meta(item_table.row_count - 1, transmart.tm_cell_md(f"{i:06}", datetime))
                 i += 1
 
+    log_with_percent("Observation data", 1.0)
     return tm_observation_tables

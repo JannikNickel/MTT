@@ -7,19 +7,28 @@ class log_type(Enum):
     WARNING = 2,
     ERROR = 3
 
-def log(text, type=log_type.INFO):
-    text = str(text)
-    log = "[" + datetime.now().strftime("%H:%M:%S") + "] "
+def get_log_text(text, type):
+    l = "[" + datetime.now().strftime("%H:%M:%S") + "] "
     if type == log_type.DEBUG:
-        log = log + "[DEBUG] " + text
+        l = l + "[DEBUG] " + text
     elif type == log_type.INFO:
-        log = log + "[INFO] " + text
+        l = l + "[INFO] " + text
     elif type == log_type.WARNING:
-        log = "\033[93m" + log + "[WARNING] " + text + "\033[0m"
+        l = "\033[93m" + l + "[WARNING] " + text + "\033[0m"
     elif type == log_type.ERROR:
-        log = "\033[91m" + log + "[ERROR] " + text + "\033[0m"
+        l = "\033[91m" + l + "[ERROR] " + text + "\033[0m"
 
-    print(log)
+    return l
+
+def log(text, type=log_type.INFO):
+    print(get_log_text(str(text), type))
+
+def log_with_percent(text, progress, type=log_type.INFO, decimals=1, print_end="\r"):
+    percent = ("{0:." + str(decimals) + "f}").format(progress * 100)
+    t = "%s (%s%%)" % (text, percent)
+    print(get_log_text(t, type), end=print_end)
+    if progress >= 1:
+        print()
 
 def log_progress_bar(progress, prefix="", suffix="", decimals=1, length=100, fill='█', print_end="\r"):
     percent = ("{0:." + str(decimals) + "f}").format(progress * 100)

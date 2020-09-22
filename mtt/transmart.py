@@ -5,7 +5,8 @@ from enum import Enum
 from . import config as cfg
 from .params_file import params_file
 from .table import table
-from .log import log, log_type, log_progress_bar
+from .log import log, log_type, log_progress_bar, log_with_percent
+from . import ascii
 
 #Formats
 file_delimiter = "\t"
@@ -14,21 +15,29 @@ illegal_path_characters = ["<", ">", ":", "/", "\\", "|", "?", "*"] #For the os 
 visitname_placeholder = "VISITNAME"
 data_label_placeholder = "DATA_LABEL"
 
+#Categorical variables
+create_categorical_timeseries = True
+max_categorical_str_len = 32
+
 def export_study(clinical_tables, mimic_tables):
     rel_path = cfg.output_path + cfg.study_id + "/"
     path = cfg.getcwd() + rel_path
 
+    log_with_percent("Exporting study", 0.0)
     #Delete old study folder
     if os.path.exists(path):
         shutil.rmtree(path, ignore_errors=True)
 
+    log_with_percent("Exporting study", 0.1)
     #Create study folder
     if not os.path.exists(path):
         os.makedirs(path)
 
+    log_with_percent("Exporting study", 0.2)
     #Reduce dataset to improve import speed
     reduce_dataset(clinical_tables)
 
+    log_with_percent("Exporting study", 0.3)
     #Create study definition file and backout.params
     study_file = params_file()
     study_file["STUDY_ID"] = cfg.study_id
@@ -37,19 +46,24 @@ def export_study(clinical_tables, mimic_tables):
     study_file.write_to(path + "study.params")
     study_file.write_to(path + "backout.params")#backout is exactly like study.params, so just write the file twice
 
+    log_with_percent("Exporting study", 0.35)
     #Split clinical and timeseries data (HDD)
     clinical_tables, hdd_tables = split_clinical_tables(clinical_tables)
 
+    log_with_percent("Exporting study", 0.4)
     #Create clinical data
     export_clinical(rel_path, clinical_tables, mimic_tables)
 
+    log_with_percent("Exporting study", 0.5)
     #Create platform
     platform_name = "ICU"
     export_platform(rel_path, platform_name, "ICU timeseries data about patients")
 
+    log_with_percent("Exporting study", 0.7)
     #Create highdimensional data
     export_hdd(rel_path, hdd_tables, platform_name)
 
+    log_with_percent("Exporting study", 1.0)
     #Return relative export path from the output directory
     return rel_path.replace(cfg.output_path, "")
 
@@ -75,7 +89,7 @@ def split_clinical_tables(src_tables):
         table = clinical[i]
         #Target tables are in the format | SUBJ_ID | VISIT_NAME | value |
         #TODO and all meta cells contain a datetime
-        if table.column_count == 3 and table.has_column("value") and table.column_meta("value").type == tm_type.NUMERICAL:
+        if table.column_count == 3 and table.has_column("value") and (table.column_meta("value").type == tm_type.NUMERICAL or (table.column_meta("value").type == tm_type.CATEGORICAL and create_categorical_timeseries == True)):
             del clinical[i]
             hdd.append(table)
 
@@ -94,12 +108,10 @@ def export_clinical(path, clinical_tables, mimic_tables):
     clinical_file.write_to(path + "clinical.params")
 
     #Create clinical data folder
-    log_progress_bar(0.0)
     if not os.path.exists(clinical_path):
         os.makedirs(clinical_path)
 
     #Remove illegal file names in the tables
-    log_progress_bar(0.1)
     for i in range(len(clinical_tables)):
         name = clinical_tables[i].name
         for illegal in illegal_path_characters:
@@ -107,21 +119,16 @@ def export_clinical(path, clinical_tables, mimic_tables):
         clinical_tables[i]._name = name
 
     #Create and store mapping file + adjust data tables
-    log_progress_bar(0.2)
     mapping = create_clinical_mapping(clinical_tables)
     mapping.store(clinical_path + clinical_map_file, file_delimiter)
 
     #Store data tables
-    log_progress_bar(0.4)
     for i in range(len(clinical_tables)):
         clinical_tables[i].store(clinical_path + clinical_tables[i].name + file_ending, file_delimiter)
-        log_progress_bar(0.4 + (i / float(len(clinical_tables)) * 0.6 * 0.9))
 
     #Create word map file
     word_map = create_word_map(clinical_tables, mimic_tables)
     word_map.store(clinical_path + clinical_word_map_file, file_delimiter)
-
-    log_progress_bar(1.0)
 
 
 def create_clinical_mapping(clinical_tables) -> table:
@@ -235,11 +242,11 @@ def export_platform(path, name, title):
     tm_platform_table.add_column("ORGANISM")
 
     #For now, only define one numeric measurement: measurement
-    #For categorical data, define one measurement for each character: C1, C2, ...
     tm_platform_table.add_row([name, "measurement", "", "", organsism])
-    max_str_len = 64
-    for i in range(max_str_len):
-        tm_platform_table.add_row([name, f"char_{i}", "", "", organsism])
+    #For categorical data, define one measurement for each character: C1, C2, ...
+    if create_categorical_timeseries == True:
+        for i in range(max_categorical_str_len):
+            tm_platform_table.add_row([name, f"char_{i}", "", "", organsism])
 
     #Store platform definition table
     tm_platform_table.store(platform_path + name + ".txt", file_delimiter)
@@ -281,17 +288,19 @@ def export_hdd(path, hdd_tables, platform_name):
     #Create data table
     data_table = table(data_file_name)
     data_table.add_column("ID_REF")
-    data_table.add_row(["measurement"])#Default numeric probe
+    #Default numeric probe
+    data_table.add_row(["measurement"])
     #Categorical probe
-    max_str_len = 64
-    for i in range(max_str_len):
-        data_table.add_row([f"char_{i}"])
+    if create_categorical_timeseries == True:
+        for i in range(max_categorical_str_len):
+            data_table.add_row([f"char_{i}"])
 
     for t in hdd_tables:
         subject_id_index = t.column_index("SUBJ_ID")
         visit_name_index = t.column_index("VISIT_NAME")
         value_index = t.column_index("value")
         value_meta = t.column_meta("value")
+        table_type = value_meta.type
         subj_id_dict = {}
         for row in range(t.row_count):
             #Create sample
@@ -308,11 +317,19 @@ def export_hdd(path, hdd_tables, platform_name):
             #Fill data
             value = t[value_index, row]
             data_table.add_column(sample_id)
-            data_table[data_table.column_count - 1, 0] = value
 
-            #Fill categorical data with null (= -1)
-            for i in range(1, max_str_len + 1):
-                data_table[data_table.column_count - 1, i] = str(-1)
+            #Numerical data
+            data_table[data_table.column_count - 1, 0] = value if table_type == tm_type.NUMERICAL else -1
+
+            #Fill categorical data
+            if create_categorical_timeseries == True:
+                categorical_values = ascii.str_to_ascii_array(value) if table_type == tm_type.CATEGORICAL else []
+                if len(categorical_values) > max_categorical_str_len:
+                    log(f"The value ({value}) in table ({t.name}) is too long (limit={max_categorical_str_len})", log_type.WARNING)
+                while(len(categorical_values) < max_categorical_str_len):
+                    categorical_values.append(str(-1))
+                for i in range(1, max_categorical_str_len + 1):
+                    data_table[data_table.column_count - 1, i] = categorical_values[i - 1]
 
     #Save tables
     map_table.store(map_file_path, file_delimiter)

@@ -3,7 +3,7 @@ import os
 import ctypes
 
 from . import config as cfg
-from .log import log, log_type
+from .log import log, log_type, log_with_percent
 from .table import table
 from . import mimic
 from . import transmart
@@ -59,20 +59,16 @@ for i in range(mimic_tables["ADMISSIONS"].row_count):
 log(">>> Transform")
 
 #Patient data
-log("Patient data")
 tm_patients = T.create_patients_data(mimic_tables, hadm_to_subj, hadm_to_visit)
 
 #Admissions data
-log("Admissions data")
 tm_admissions = T.create_admissions_data(mimic_tables, hadm_to_subj, hadm_to_visit)
 
 #Diagnoses/Procedures data
-log("Diagnoses/Procedures data")
 tm_diagnoses = T.create_diagnoses_data(mimic_tables, hadm_to_subj, hadm_to_visit)
 tm_procedures = T.create_procedures_data(mimic_tables, hadm_to_subj, hadm_to_visit)
 
 #Observation data
-log("Observation data")
 tm_observations = T.create_observations_data(mimic_tables, hadm_to_subj, hadm_to_visit)
 
 ###############################################################################
