@@ -71,6 +71,9 @@ tm_procedures = T.create_procedures_data(mimic_tables, hadm_to_subj, hadm_to_vis
 #Observation data
 tm_observations = T.create_observations_data(mimic_tables, hadm_to_subj, hadm_to_visit)
 
+#Lab data
+#tm_lab = T.create_lab_data(mimic_tables, hadm_to_subj, hadm_to_visit)
+
 ###############################################################################
 # Export                                                                      #
 ###############################################################################

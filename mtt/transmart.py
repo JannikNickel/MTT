@@ -16,7 +16,7 @@ visitname_placeholder = "VISITNAME"
 data_label_placeholder = "DATA_LABEL"
 
 #Categorical variables
-create_categorical_timeseries = True
+create_categorical_timeseries = False
 max_categorical_str_len = 32
 
 def export_study(clinical_tables, mimic_tables):
@@ -295,6 +295,7 @@ def export_hdd(path, hdd_tables, platform_name):
         for i in range(max_categorical_str_len):
             data_table.add_row([f"char_{i}"])
 
+    total_neg_values = 0
     for t in hdd_tables:
         subject_id_index = t.column_index("SUBJ_ID")
         visit_name_index = t.column_index("VISIT_NAME")
@@ -321,6 +322,13 @@ def export_hdd(path, hdd_tables, platform_name):
             #Numerical data
             data_table[data_table.column_count - 1, 0] = value if table_type == tm_type.NUMERICAL else -1
 
+            #Negative values are being used for missing values, so always ensure that no valid negative values are in the dataset
+            #In case that happens, the values of the type of measurement have to be shifted to a new positive range (Shouldnt happen, because measurements are usually in positive ranges)
+            if table_type == tm_type.NUMERICAL:
+                if value < 0:
+                    log(f"table {t.name} contains negative value {value}!", log_type.WARNING)
+                    total_neg_values += 1
+
             #Fill categorical data
             if create_categorical_timeseries == True:
                 categorical_values = ascii.str_to_ascii_array(value) if table_type == tm_type.CATEGORICAL else []
@@ -334,6 +342,9 @@ def export_hdd(path, hdd_tables, platform_name):
     #Save tables
     map_table.store(map_file_path, file_delimiter)
     data_table.store(data_file_path, file_delimiter)
+    
+    if total_neg_values > 0:
+        log(f"Detected {total_neg_values} negative values!", log_type.WARNING)
 
 
 class tm_type(Enum):

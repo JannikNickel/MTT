@@ -132,7 +132,7 @@ def create_observations_data(mimic_tables, hadm_to_subj, hadm_to_visit):
     group_progress = 0
     for item_key in item_groups:
         group_progress += 1
-        log_with_percent("Observation data", min((group_progress / float(len(item_groups))), 0.999))
+        #log_with_percent("Observation data", min((group_progress / float(len(item_groups))), 0.999))
 
         first_item_def = [x for x in mimic_items.observation_items if x.target == item_key][0]
 
@@ -142,9 +142,10 @@ def create_observations_data(mimic_tables, hadm_to_subj, hadm_to_visit):
         item_table.add_column("VISIT_NAME")
         tmtype = transmart.tm_type.NUMERICAL if first_item_def.numeric else transmart.tm_type.CATEGORICAL
         item_table.add_column("value", transmart.tm_column_md(f"Subjects+Hospital_Stays+{visit_name_path}+Medical+Observations+{item_key}", tmtype))
-        #TODO date with special placeholder
         tm_observation_tables.append(item_table)
         column_meta = item_table.column_meta("value")
+
+        error_column = m_chart.column_index("error")
 
         #GROUP the rows of this item group by hospital admissions
         hadm_groups = m_chart.group_by("hadm_id", func=None, limited_rows=item_groups[item_key])
@@ -172,6 +173,10 @@ def create_observations_data(mimic_tables, hadm_to_subj, hadm_to_visit):
                         value = float(value)
                     except ValueError:
                         continue
+
+                #Skip invalid measurments (column "error" (0/1) in some tables), some items contain wrong negative values without the error flag (e.g. blood pressure)
+                if (error_column != -1 and m_chart[error_column, row] == "1") or (item_def.numeric == True and value < 0):
+                    continue
 
                 #Modify item based on a given function
                 if item_def.modifier != None:
@@ -202,3 +207,26 @@ def create_observations_data(mimic_tables, hadm_to_subj, hadm_to_visit):
 
     log_with_percent("Observation data", 1.0)
     return tm_observation_tables
+
+def create_lab_data(mimic_tables, hadm_to_subj, hadm_to_visit):
+    log("Lab data")
+    m_chart = mimic_tables["CHARTEVENTS"]
+    tm_lab_tables = []
+
+    #Group by items
+    item_groups = m_chart.group_by("itemid")
+    #Iterate through the items and create one table for each item
+    group_progress = 0
+    for item_key in item_groups:
+        group_progress += 1
+
+        item_table = table("tm_lab_" + item_key)
+        item_table.add_column("SUBJ_ID")
+        item_table.add_column("VISIT_NAME")
+        tmtype = None#TODO find out the type for this (most used value)
+        item_table.add_column("value", transmart.tm_column_md(f"Subjects+Hospital_Stays+{visit_name_path}+Medical+Lab+{fluid_type}+{item_key}", tmtype))
+        tm_observation_tables.append(item_table)
+        column_meta = item_table.column_meta("value")
+
+        #GROUP the rows of this item group by hospital admissions
+        hadm_groups = m_chart.group_by("hadm_id", func=None, limited_rows=item_groups[item_key])
