@@ -16,8 +16,8 @@ visitname_placeholder = "VISITNAME"
 data_label_placeholder = "DATA_LABEL"
 
 #Categorical variables
-create_categorical_timeseries = False
-max_categorical_str_len = 32
+create_categorical_timeseries = True
+max_categorical_str_len = 16
 
 def export_study(clinical_tables, mimic_tables):
     rel_path = cfg.output_path + cfg.study_id + "/"

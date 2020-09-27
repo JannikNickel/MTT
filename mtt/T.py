@@ -115,6 +115,51 @@ def create_procedures_data(mimic_tables, hadm_to_subj, hadm_to_visit):
     log("Procedures data")
     return create_icd_table(mimic_tables["PROCEDURES_ICD"], hadm_to_visit, "tm_procedures", f"Subjects+Hospital_Stays+{visit_name_path}+Medical+Procedures", lambda x: f"{x:02}{num_str_utils.number_ordinal(x)}")
 
+#Function for generic numerical/categorical data loading with measurement times. Returns (value, datetime) and None for invalid data rows
+def load_value_entry(source_table: table, row: int, source_column: str, is_numerical: bool, time_column: str = None, value_modifier=None, value_limits=None, error_column: int=-1):
+    value = source_table.get(source_column, row)
+    datetime = None
+
+    #Skip null values
+    if value == "":
+        return (None, None)
+
+    #Cast numeric values and skip non numeric values in numeric variables
+    if is_numerical == True:
+        try:
+            value = float(value)
+        except ValueError:
+            return (None, None)
+
+    #Skip invalid measurments (column "error" (0/1) in some tables), some items contain wrong negative values without the error flag (e.g. blood pressure)
+    if (error_column != -1 and source_table[error_column, row] == "1") or (is_numerical == True and value < 0):
+        return (None, None)
+
+    #Modify item based on a given function
+    if value_modifier != None:
+        value = value_modifier(value)
+
+    #Skip out of bounds numeric values
+    if is_numerical == True and value_limits != None:
+        if value < value_limits[0] or value > value_limits[1]:
+            return (None, None)
+    
+    #Normalize and skip certain categorical values
+    if is_numerical == False:
+        value = value.title()
+        if value == "Other/Remarks":
+            return (None, None)
+
+    #Extract datetime (charttime is most accurate)
+    if time_column != None:
+        datetime = source_table.get(time_column, row)
+        try:
+            datetime = dt.datetime.strptime(datetime, mimic.time_format)
+        except ValueError:
+            return (None, None)#Skip entries with invalid times
+
+    return (value, datetime)
+
 def create_observations_data(mimic_tables, hadm_to_subj, hadm_to_visit):
     log_with_percent("Observation data", 0.0)
     m_chart = mimic_tables["CHARTEVENTS"]
@@ -132,15 +177,15 @@ def create_observations_data(mimic_tables, hadm_to_subj, hadm_to_visit):
     group_progress = 0
     for item_key in item_groups:
         group_progress += 1
-        #log_with_percent("Observation data", min((group_progress / float(len(item_groups))), 0.999))
+        log_with_percent("Observation data", min((group_progress / float(len(item_groups))), 0.999))
 
-        first_item_def = [x for x in mimic_items.observation_items if x.target == item_key][0]
+        item_def = [x for x in mimic_items.observation_items if x.target == item_key][0]
 
         #Create a table for this item group
         item_table = table("tm_observation_" + item_key)
         item_table.add_column("SUBJ_ID")
         item_table.add_column("VISIT_NAME")
-        tmtype = transmart.tm_type.NUMERICAL if first_item_def.numeric else transmart.tm_type.CATEGORICAL
+        tmtype = transmart.tm_type.NUMERICAL if item_def.numeric else transmart.tm_type.CATEGORICAL
         item_table.add_column("value", transmart.tm_column_md(f"Subjects+Hospital_Stays+{visit_name_path}+Medical+Observations+{item_key}", tmtype))
         tm_observation_tables.append(item_table)
         column_meta = item_table.column_meta("value")
@@ -155,50 +200,14 @@ def create_observations_data(mimic_tables, hadm_to_subj, hadm_to_visit):
             subj_id = m_chart.get("subject_id", h_rows[0])
             hadm_id = m_chart.get("hadm_id", h_rows[0])
             item_id = m_chart.get("itemid", h_rows[0])
-            item_def = [x for x in mimic_items.observation_items if x.id == item_id][0]
 
             #Iterate through each item entry for this hospital admission and load the data
             i = 0#Count number for each entry as metadata
             for row in h_rows:
-                value = m_chart.get(item_def.source, row)
-                datetime = None
-
-                #Skip null values
-                if value == "":
+                #Load data row
+                value, datetime = load_value_entry(m_chart, row, item_def.source, item_def.numeric, "charttime", item_def.modifier, item_def.limits, error_column)
+                if value == None or datetime == None:#Invalid result
                     continue
-
-                #Cast numeric values and skip non numeric values in numeric variables
-                if item_def.numeric == True:
-                    try:
-                        value = float(value)
-                    except ValueError:
-                        continue
-
-                #Skip invalid measurments (column "error" (0/1) in some tables), some items contain wrong negative values without the error flag (e.g. blood pressure)
-                if (error_column != -1 and m_chart[error_column, row] == "1") or (item_def.numeric == True and value < 0):
-                    continue
-
-                #Modify item based on a given function
-                if item_def.modifier != None:
-                    value = item_def.modifier(value)
-
-                #Skip out of bounds numeric values
-                if item_def.numeric == True and item_def.limits != None:
-                    if value < item_def.limits[0] or value > item_def.limits[1]:
-                        continue
-                
-                #Normalize and skip certain categorical values
-                if item_def.numeric == False:
-                    value = value.title()
-                    if value == "Other/Remarks":
-                        continue
-
-                #Extract datetime (charttime is most accurate)
-                datetime = m_chart.get("charttime", row)
-                try:
-                    datetime = dt.datetime.strptime(datetime, mimic.time_format)
-                except ValueError:
-                    continue#Skip entries with invalid times
                 
                 #Add row and set entry number as metadata
                 item_table.add_row([subj_id, hadm_to_visit[hadm_id], value])
@@ -209,24 +218,77 @@ def create_observations_data(mimic_tables, hadm_to_subj, hadm_to_visit):
     return tm_observation_tables
 
 def create_lab_data(mimic_tables, hadm_to_subj, hadm_to_visit):
-    log("Lab data")
-    m_chart = mimic_tables["CHARTEVENTS"]
+    log_with_percent("Lab data", 0.0)
+    m_lab = mimic_tables["LABEVENTS"]
+    m_items = mimic_tables["D_LABITEMS"]
     tm_lab_tables = []
 
     #Group by items
-    item_groups = m_chart.group_by("itemid")
+    item_groups = m_lab.group_by("itemid")
     #Iterate through the items and create one table for each item
     group_progress = 0
     for item_key in item_groups:
+        log_with_percent("Lab data", group_progress / float(len(item_groups)))
         group_progress += 1
 
+        #Skip lab items with very few occurrences
+        if len(item_groups[item_key]) < 100:
+            continue
+
+        #Find item definition
+        item_def_row = m_items.where_first("itemid", item_key)
+        item_name = m_items.get("label", item_def_row)
+        item_fluid = m_items.get("fluid", item_def_row)
+
+        #Determine item type (> 50% numbers => numerical item)
+        numerical_value_count = 0
+        item_rows = item_groups[item_key]
+        for i in item_rows:
+            value = m_lab.get("value", i)
+            if value.replace('.', '', 1).replace('-', '', 1).isdigit():
+                numerical_value_count += 1
+        is_numerical = numerical_value_count > len(item_rows) * 0.5
+        tmtype = transmart.tm_type.NUMERICAL if is_numerical else transmart.tm_type.CATEGORICAL
+
+        #Determine unit for numerical item (For LABEVENTS, units are either missing or consistent for each item => Search first non null value)
+        unit = ""
+        if tmtype == transmart.tm_type.NUMERICAL:
+            for i in item_rows:
+                u = m_lab.get("valueuom", i)
+                if u != "":
+                    unit = u
+                    break
+
+        #Create table for this item
         item_table = table("tm_lab_" + item_key)
         item_table.add_column("SUBJ_ID")
         item_table.add_column("VISIT_NAME")
-        tmtype = None#TODO find out the type for this (most used value)
-        item_table.add_column("value", transmart.tm_column_md(f"Subjects+Hospital_Stays+{visit_name_path}+Medical+Lab+{fluid_type}+{item_key}", tmtype))
-        tm_observation_tables.append(item_table)
+        item_table.add_column("value", transmart.tm_column_md(f"Subjects+Hospital_Stays+{visit_name_path}+Medical+Lab+{item_fluid}+{item_name}", tmtype))
+        tm_lab_tables.append(item_table)
         column_meta = item_table.column_meta("value")
 
-        #GROUP the rows of this item group by hospital admissions
-        hadm_groups = m_chart.group_by("hadm_id", func=None, limited_rows=item_groups[item_key])
+        #GROUP the rows of this item by hospital admissions
+        hadm_groups = m_lab.group_by("hadm_id", func=None, limited_rows=item_groups[item_key])
+        for h_key, h_rows in hadm_groups.items():
+            #Load data entries for this admission
+            subj_id = m_lab.get("subject_id", h_rows[0])
+            item_id = m_lab.get("itemid", h_rows[0])
+            i = 0
+            for h_row in h_rows:
+                #Labevents contains results from external sources (no hadm_id specified) -> Skip those
+                hadm_id = m_lab.get("hadm_id", h_rows[0])
+                if hadm_id == "":
+                    continue
+
+                #Load data row
+                value, datetime = load_value_entry(m_lab, h_row, "value", is_numerical, "charttime")
+                if value == None or datetime == None:#Invalid result
+                    continue
+                
+                #Add row and set entry number as metadata
+                item_table.add_row([subj_id, hadm_to_visit[hadm_id], value])
+                column_meta.set_cell_meta(item_table.row_count - 1, transmart.tm_cell_md(f"{i:06}", datetime))
+                i += 1
+            
+    log_with_percent("Lab data", 1.0)
+    return tm_lab_tables
