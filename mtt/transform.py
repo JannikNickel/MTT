@@ -46,3 +46,20 @@ def map_values_to_one(values, value, x):
     if x in values:
         return value
     return x
+    
+def icu_to_full_name(icu):
+    if icu == "CCU":
+        return "Coronary Care Unit"
+    if icu == "CSRU":
+        return "Cardiac Surgery Recovery Unit"
+    if icu == "MICU":
+        return "Medical Intensive Care Unit"
+    if icu == "NICU":
+        return "Neonatal Intensive Care Unit"
+    if icu == "NWARD":
+        return "Neonatal Ward"
+    if icu == "SICU":
+        return "Surgical Intensive Care Unit"
+    if icu == "TSICU":
+        return "Trauma/Surgical Intensiv Care Unit"
+    return "None"

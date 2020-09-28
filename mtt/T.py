@@ -160,6 +160,7 @@ def load_value_entry(source_table: table, row: int, source_column: str, is_numer
 
     return (value, datetime)
 
+
 def create_observations_data(mimic_tables, hadm_to_subj, hadm_to_visit):
     log_with_percent("Observation data", 0.0)
     m_chart = mimic_tables["CHARTEVENTS"]
@@ -189,7 +190,6 @@ def create_observations_data(mimic_tables, hadm_to_subj, hadm_to_visit):
         item_table.add_column("value", transmart.tm_column_md(f"Subjects+Hospital_Stays+{visit_name_path}+Medical+Observations+{item_key}", tmtype))
         tm_observation_tables.append(item_table)
         column_meta = item_table.column_meta("value")
-
         error_column = m_chart.column_index("error")
 
         #GROUP the rows of this item group by hospital admissions
@@ -216,6 +216,7 @@ def create_observations_data(mimic_tables, hadm_to_subj, hadm_to_visit):
 
     log_with_percent("Observation data", 1.0)
     return tm_observation_tables
+
 
 def create_lab_data(mimic_tables, hadm_to_subj, hadm_to_visit):
     log_with_percent("Lab data", 0.0)
@@ -292,3 +293,82 @@ def create_lab_data(mimic_tables, hadm_to_subj, hadm_to_visit):
             
     log_with_percent("Lab data", 1.0)
     return tm_lab_tables
+
+
+def create_icu_stay_data(mimic_tables, hadm_to_subj, hadm_to_visit):
+    log("ICU stay data")
+    m_transfers = mimic_tables["TRANSFERS"]
+    
+    #Create table
+    t_table = table(f"tm_icustays")
+    t_table.add_column("SUBJ_ID")
+    t_table.add_column("VISIT_NAME")
+    t_table.add_column("value", transmart.tm_column_md(f"Subjects+Hospital_Stays+{visit_name_path}+Administration+ICU", transmart.tm_type.CATEGORICAL))
+    column_meta = t_table.column_meta("value")
+
+    #GROUP by hospital admissions
+    stay_groups = m_transfers.group_by("hadm_id")
+    for key, rows in stay_groups.items():
+        #Add all transfers of this admission
+        i = 0
+        for row in rows:
+            subj_id = m_transfers.get("subject_id", row)
+            hadm_id = m_transfers.get("hadm_id", row)
+            eventtype = m_transfers.get("eventtype", row)
+            careunit = m_transfers.get("curr_careunit", row)
+            datetime = m_transfers.get("intime", row)
+
+            #Discharge entries are not relevant, because the patient got released from the hospital
+            if eventtype == "discharge":
+                continue
+
+            #Transform icu abbreviation to full name
+            careunit = transform.icu_to_full_name(careunit)
+
+            #Load datetime
+            try:
+                datetime = dt.datetime.strptime(datetime, mimic.time_format)
+            except ValueError:
+                continue
+
+            #Add row to table
+            t_table.add_row([subj_id, hadm_to_visit[hadm_id], careunit])
+            column_meta.set_cell_meta(t_table.row_count - 1, transmart.tm_cell_md(f"{i:02}", datetime))
+            i += 1
+
+    return t_table
+
+def create_services_data(mimic_tables, hadm_to_subj, hadm_to_visit):
+    log("Service data")
+    m_services = mimic_tables["SERVICES"]
+    
+    #Create table
+    t_table = table(f"tm_services")
+    t_table.add_column("SUBJ_ID")
+    t_table.add_column("VISIT_NAME")
+    t_table.add_column("value", transmart.tm_column_md(f"Subjects+Hospital_Stays+{visit_name_path}+Administration+Services", transmart.tm_type.CATEGORICAL))
+    column_meta = t_table.column_meta("value")
+
+    #GROUP by hospital admissions
+    stay_groups = m_services.group_by("hadm_id")
+    for key, rows in stay_groups.items():
+        #Add all transfers of this admission
+        i = 0
+        for row in rows:
+            subj_id = m_services.get("subject_id", row)
+            hadm_id = m_services.get("hadm_id", row)
+            service = m_services.get("curr_service", row)
+            datetime = m_services.get("transfertime", row)
+
+            #Load datetime
+            try:
+                datetime = dt.datetime.strptime(datetime, mimic.time_format)
+            except ValueError:
+                continue
+
+            #Add row to table
+            t_table.add_row([subj_id, hadm_to_visit[hadm_id], service])
+            column_meta.set_cell_meta(t_table.row_count - 1, transmart.tm_cell_md(f"{i:02}", datetime))
+            i += 1
+
+    return t_table

@@ -398,3 +398,13 @@ class tm_column_md():
     def removed_row(self, row: int):
         if row < len(self._cell_meta):
             del self._cell_meta[row]
+
+#Can be used to define tables with observations that contain more than one sub value (category + node_name + column_name)
+class tm_partial_column_md(tm_column_md):
+    def __init__(self, category, tmtype=tm_type.NONE, node_name=""):
+        super().__init__(category, tmtype)
+        self._node_name = node_name
+
+    @property
+    def node_name(self):
+        return self._node_name

@@ -73,15 +73,21 @@ tm_procedures = T.create_procedures_data(mimic_tables, hadm_to_subj, hadm_to_vis
 #tm_observations = T.create_observations_data(mimic_tables, hadm_to_subj, hadm_to_visit)
 
 #Lab data
-tm_lab = T.create_lab_data(mimic_tables, hadm_to_subj, hadm_to_visit)
+#tm_lab = T.create_lab_data(mimic_tables, hadm_to_subj, hadm_to_visit)
+
+#ICU stays data
+tm_icu = T.create_icu_stay_data(mimic_tables, hadm_to_subj, hadm_to_visit)
+
+#Services data
+tm_services = T.create_services_data(mimic_tables, hadm_to_subj, hadm_to_visit)
 
 ###############################################################################
 # Export                                                                      #
 ###############################################################################
 log(">>> Export")
-tm_tables = [tm_patients, tm_admissions, tm_diagnoses, tm_procedures]
+tm_tables = [tm_patients, tm_admissions, tm_diagnoses, tm_procedures, tm_icu, tm_services]
 #tm_tables += tm_observations
-tm_tables += tm_lab
+#tm_tables += tm_lab
 rel_export_path = transmart.export_study(tm_tables, mimic_tables)
 
 ###############################################################################
