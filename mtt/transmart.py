@@ -93,11 +93,41 @@ def split_clinical_tables(src_tables):
 
     for i in range(len(src_tables) - 1, -1, -1):
         table = clinical[i]
+
+        #First approach
         #Target tables are in the format | SUBJ_ID | VISIT_NAME | value |
-        #TODO and all meta cells contain a datetime
-        if table.column_count == 3 and table.has_column("value") and (table.column_meta("value").type == tm_type.NUMERICAL or (table.column_meta("value").type == tm_type.CATEGORICAL and create_categorical_timeseries == True)):
-            del clinical[i]
-            hdd.append(table)
+        #if table.column_count == 3 and table.has_column("value") and (table.column_meta("value").type == tm_type.NUMERICAL or (table.column_meta("value").type == tm_type.CATEGORICAL and create_categorical_timeseries == True)):
+        #    del clinical[i]
+        #    hdd.append(table)
+
+        #New approach: Dynamically define the platform based on the tables to allow sub values (prescriptions, etc.)
+        #HD tables only contain columns SUBJ_ID, VISIT_NAME and the datetime meta data is assigned for all cells of all other columns
+        fails_criteria = False
+        for c in range(table.column_count):
+            if c == 0 and table.column_name(c) != "SUBJ_ID":
+                fails_criteria = True
+                break
+            elif c == 1 and table.column_name(c) != "VISIT_NAME":
+                fails_criteria = True
+                break
+            elif c >= 2:
+                meta = table.column_meta(table.column_name(c))
+                if type(meta) is tm_column_md:
+                    for k in range(table.row_count):
+                        cell_meta = meta.get_cell_meta(k)
+                        if (not (type(cell_meta) is tm_cell_md)) or (cell_meta.datetime == None):
+                            fails_criteria = True
+                            break
+                else:
+                    fails_criteria = True
+                    break
+
+        if fails_criteria == True:
+            continue
+
+        #Table is valid for hd-data
+        del clinical[i]
+        hdd.append(table)
 
     return (clinical, hdd)
 
@@ -212,7 +242,7 @@ def create_word_map(clinical_tables, mimic_tables):
     try:
         tm_procedures = [x for x in clinical_tables if x.name == "tm_procedures"][0]
     except:
-        pass
+        tm_procedures = None
     if tm_procedures != None:
         for i in range(mimic_tables["D_ICD_PROCEDURES"].row_count):
             tm_word_map_table.add_row([tm_procedures.name + file_ending,
