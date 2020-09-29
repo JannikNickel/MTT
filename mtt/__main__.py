@@ -54,41 +54,40 @@ for i in range(mimic_tables["ADMISSIONS"].row_count):
     if not hadm_id in hadm_to_subj:
         hadm_to_subj[hadm_id] = subj_id
 
+
 ###############################################################################
-# Generate data tables                                                        #
+# Generate data tables (transform)                                            #
 ###############################################################################
 log(">>> Transform")
+tm_tables = []
 
 #Patient data
-tm_patients = T.create_patients_data(mimic_tables, hadm_to_subj, hadm_to_visit)
-
+tm_tables += [T.create_patients_data(mimic_tables, hadm_to_subj, hadm_to_visit)]
 #Admissions data
-tm_admissions = T.create_admissions_data(mimic_tables, hadm_to_subj, hadm_to_visit)
-
+tm_tables += [T.create_admissions_data(mimic_tables, hadm_to_subj, hadm_to_visit)]
 #Diagnoses/Procedures data
-tm_diagnoses = T.create_diagnoses_data(mimic_tables, hadm_to_subj, hadm_to_visit)
-tm_procedures = T.create_procedures_data(mimic_tables, hadm_to_subj, hadm_to_visit)
-
+tm_tables += [T.create_diagnoses_data(mimic_tables, hadm_to_subj, hadm_to_visit)]
+tm_tables += [T.create_procedures_data(mimic_tables, hadm_to_subj, hadm_to_visit)]
 #Observation data
-#tm_observations = T.create_observations_data(mimic_tables, hadm_to_subj, hadm_to_visit)
-
+tm_tables += T.create_observations_data(mimic_tables, hadm_to_subj, hadm_to_visit)
 #Lab data
-#tm_lab = T.create_lab_data(mimic_tables, hadm_to_subj, hadm_to_visit)
-
+tm_tables += T.create_lab_data(mimic_tables, hadm_to_subj, hadm_to_visit)
 #ICU stays data
-tm_icu = T.create_icu_stay_data(mimic_tables, hadm_to_subj, hadm_to_visit)
-
+tm_tables += [T.create_icu_stay_data(mimic_tables, hadm_to_subj, hadm_to_visit)]
 #Services data
-tm_services = T.create_services_data(mimic_tables, hadm_to_subj, hadm_to_visit)
+tm_tables += [T.create_services_data(mimic_tables, hadm_to_subj, hadm_to_visit)]
+#Output data
+tm_tables += T.create_output_data(mimic_tables, hadm_to_subj, hadm_to_visit)
+#Input data
+tm_tables += T.create_input_data(mimic_tables, hadm_to_subj, hadm_to_visit)
+
 
 ###############################################################################
 # Export                                                                      #
 ###############################################################################
 log(">>> Export")
-tm_tables = [tm_patients, tm_admissions, tm_diagnoses, tm_procedures, tm_icu, tm_services]
-#tm_tables += tm_observations
-#tm_tables += tm_lab
 rel_export_path = transmart.export_study(tm_tables, mimic_tables)
+
 
 ###############################################################################
 # Upload                                                                      #

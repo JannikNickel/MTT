@@ -116,7 +116,7 @@ def create_procedures_data(mimic_tables, hadm_to_subj, hadm_to_visit):
     return create_icd_table(mimic_tables["PROCEDURES_ICD"], hadm_to_visit, "tm_procedures", f"Subjects+Hospital_Stays+{visit_name_path}+Medical+Procedures", lambda x: f"{x:02}{num_str_utils.number_ordinal(x)}")
 
 #Function for generic numerical/categorical data loading with measurement times. Returns (value, datetime) and None for invalid data rows
-def load_value_entry(source_table: table, row: int, source_column: str, is_numerical: bool, time_column: str = None, value_modifier=None, value_limits=None, error_column: int=-1):
+def load_value_entry(source_table: table, row: int, source_column: str, is_numerical: bool, time_column: str = None, value_modifier=None, value_limits=None, error_column_index: int=-1):
     value = source_table.get(source_column, row)
     datetime = None
 
@@ -132,7 +132,7 @@ def load_value_entry(source_table: table, row: int, source_column: str, is_numer
             return (None, None)
 
     #Skip invalid measurments (column "error" (0/1) in some tables), some items contain wrong negative values without the error flag (e.g. blood pressure)
-    if (error_column != -1 and source_table[error_column, row] == "1") or (is_numerical == True and value < 0):
+    if (error_column_index != -1 and source_table[error_column_index, row] == "1") or (is_numerical == True and value < 0):
         return (None, None)
 
     #Modify item based on a given function
@@ -160,52 +160,50 @@ def load_value_entry(source_table: table, row: int, source_column: str, is_numer
 
     return (value, datetime)
 
-
-def create_observations_data(mimic_tables, hadm_to_subj, hadm_to_visit):
-    log_with_percent("Observation data", 0.0)
-    m_chart = mimic_tables["CHARTEVENTS"]
-    tm_observation_tables = []
+def create_item_def_tables_task(task_name, mimic_table, hadm_to_subj, hadm_to_visit, item_definitions, table_base_name, value_category_path, time_column_name, error_column_name):
+    log_with_percent(task_name, 0.0)
+    tm_tables = []
 
     #GROUP by mapped item ids (MIMIC-III id -> tranSMART target name)
     map_id_to_target = lambda id: (
-        filtered := [x for x in mimic_items.observation_items if x.id == id],
+        filtered := [x for x in item_definitions if x.id == id],
         filtered[0].target if len(filtered) > 0 else "Unmapped"
     )[-1]
-    item_groups = m_chart.group_by("itemid", lambda x: map_id_to_target(x))
+    item_groups = mimic_table.group_by("itemid", lambda x: map_id_to_target(x))
     item_groups.pop("Unmapped", None)#Remove unmapped data
 
     #Iterate through target items
     group_progress = 0
     for item_key in item_groups:
         group_progress += 1
-        log_with_percent("Observation data", min((group_progress / float(len(item_groups))), 0.999))
+        log_with_percent(task_name, min((group_progress / float(len(item_groups))), 0.999))
 
-        item_def = [x for x in mimic_items.observation_items if x.target == item_key][0]
+        item_def = [x for x in item_definitions if x.target == item_key][0]
 
         #Create a table for this item group
-        item_table = table("tm_observation_" + item_key)
+        item_table = table(f"tm_{table_base_name}_" + item_key)
         item_table.add_column("SUBJ_ID")
         item_table.add_column("VISIT_NAME")
         tmtype = transmart.tm_type.NUMERICAL if item_def.numeric else transmart.tm_type.CATEGORICAL
-        item_table.add_column("value", transmart.tm_column_md(f"Subjects+Hospital_Stays+{visit_name_path}+Medical+Observations+{item_key}", tmtype))
-        tm_observation_tables.append(item_table)
+        item_table.add_column("value", transmart.tm_column_md(f"{value_category_path}+{item_key}", tmtype))
+        tm_tables.append(item_table)
         column_meta = item_table.column_meta("value")
-        error_column = m_chart.column_index("error")
+        error_column = mimic_table.column_index(error_column_name)
 
         #GROUP the rows of this item group by hospital admissions
-        hadm_groups = m_chart.group_by("hadm_id", func=None, limited_rows=item_groups[item_key])
+        hadm_groups = mimic_table.group_by("hadm_id", func=None, limited_rows=item_groups[item_key])
 
         #Iterate through all hospital admissions
         for h_key, h_rows in hadm_groups.items():
-            subj_id = m_chart.get("subject_id", h_rows[0])
-            hadm_id = m_chart.get("hadm_id", h_rows[0])
-            item_id = m_chart.get("itemid", h_rows[0])
+            subj_id = mimic_table.get("subject_id", h_rows[0])
+            hadm_id = mimic_table.get("hadm_id", h_rows[0])
+            item_id = mimic_table.get("itemid", h_rows[0])
 
             #Iterate through each item entry for this hospital admission and load the data
             i = 0#Count number for each entry as metadata
             for row in h_rows:
                 #Load data row
-                value, datetime = load_value_entry(m_chart, row, item_def.source, item_def.numeric, "charttime", item_def.modifier, item_def.limits, error_column)
+                value, datetime = load_value_entry(mimic_table, row, item_def.source, item_def.numeric, time_column_name, item_def.modifier, item_def.limits, error_column)
                 if value == None or datetime == None:#Invalid result
                     continue
                 
@@ -214,9 +212,19 @@ def create_observations_data(mimic_tables, hadm_to_subj, hadm_to_visit):
                 column_meta.set_cell_meta(item_table.row_count - 1, transmart.tm_cell_md(f"{i:06}", datetime))
                 i += 1
 
-    log_with_percent("Observation data", 1.0)
-    return tm_observation_tables
+    log_with_percent(task_name, 1.0)
+    return tm_tables
 
+def create_observations_data(mimic_tables, hadm_to_subj, hadm_to_visit):
+    return create_item_def_tables_task("Observation data",
+        mimic_tables["CHARTEVENTS"],
+        hadm_to_subj,
+        hadm_to_visit,
+        mimic_items.observation_items,
+        "observation",
+        f"Subjects+Hospital_Stays+{visit_name_path}+Medical+Observations",
+        "charttime",
+        "error")
 
 def create_lab_data(mimic_tables, hadm_to_subj, hadm_to_visit):
     log_with_percent("Lab data", 0.0)
@@ -293,7 +301,6 @@ def create_lab_data(mimic_tables, hadm_to_subj, hadm_to_visit):
             
     log_with_percent("Lab data", 1.0)
     return tm_lab_tables
-
 
 def create_icu_stay_data(mimic_tables, hadm_to_subj, hadm_to_visit):
     log("ICU stay data")
@@ -372,3 +379,117 @@ def create_services_data(mimic_tables, hadm_to_subj, hadm_to_visit):
             i += 1
 
     return t_table
+
+def create_output_data(mimic_tables, hadm_to_subj, hadm_to_visit):
+    return create_item_def_tables_task("Output data",
+        mimic_tables["OUTPUTEVENTS"],
+        hadm_to_subj,
+        hadm_to_visit,
+        mimic_items.output_items,
+        "output",
+        f"Subjects+Hospital_Stays+{visit_name_path}+Medical+Output",
+        "charttime",
+        "")
+
+def create_input_data(mimic_tables, hadm_to_subj, hadm_to_visit):
+    log("Merging input tables...")
+    #Merge input tables from CareVue and MetaVision
+    m_carevue = mimic_tables["INPUTEVENTS_CV"]
+    m_metavision = mimic_tables["INPUTEVENTS_MV"]
+
+    m_input = table("INPUTEVENTS")
+    column_map = lambda x: "charttime" if x == "starttime" else x #Datetime is different between CareVue and MetaVision
+    for i in range(m_carevue.column_count):
+        #Find all columns that exist in both tables (or can be mapped by column_map lambda)
+        cv_column = m_carevue.column_name(i)
+        column = column_map(cv_column)
+        mv_column = None
+        for k in range(m_metavision.column_count):
+            if column_map(m_metavision.column_name(k)) == column:
+                mv_column = m_metavision.column_name(k)
+                break
+        if mv_column != None:
+            #Copy the column values from both tables to the new table
+            m_input.add_column(column)
+            table.map_column(m_carevue, m_input, cv_column, column, None, 0)
+            table.map_column(m_metavision, m_input, mv_column, column, None, m_carevue.row_count)
+
+    log_with_percent("Input data", 0.0)
+    m_items = mimic_tables["D_ITEMS"]
+    tm_tables = []
+    #GROUP by item
+    item_groups = m_input.group_by("itemid").items()
+    group_progress = 0
+    for item_key, item_rows in item_groups:
+        log_with_percent("Input data", group_progress / float(len(item_groups)))
+        group_progress += 1
+
+        #Skip items with less than 100 entries
+        if len(item_rows) < 100:
+            continue
+
+        #Find item definition in D_ITEMS
+        item_def_row = m_items.where_first("itemid", item_key)
+        item_lbl = m_items.get("label", item_def_row)
+        is_cv = (int(m_items.get("itemid", item_def_row)) < 200000)
+
+        #Try to automatically find the unit for this item
+        unit_groups = m_input.group_by("amountuom", limited_rows=item_rows)                    #Group by occurring units
+        units = [x for x in unit_groups.keys() if x != ""]
+        unit = max(unit_groups.keys(), key=lambda x: len(unit_groups[x]) if x != "" else 0) #Find the most occurring unit
+        rate_unit_groups = m_input.group_by("rateuom", limited_rows=item_rows)                 #Find all possible rate units for this item
+        rate_units = [x for x in rate_unit_groups.keys() if x != ""]
+        rate_unit = max(rate_unit_groups.keys(), key=lambda x: len(rate_unit_groups[x]) if x != "" else 0).replace("/", " ")    #Find most occuring rate unit
+
+        #Warning if multiple units exists for this item
+        if len(units) > 1 or len(rate_units) > 1:
+            log(log_type.WARNING, f"Input Item {item_lbl} ({item_key}) uses multiple units! {len([x for x in units if x != unit])} entries will be skipped")
+
+        #Create a table for this item
+        db_path = "CareVue" if is_cv == True else "Metavision"
+        path = f"Subjects+Hospital_Stays+{visit_name_path}+Medical+Input+{db_path}+{item_lbl} ({unit})"
+        i_table = table(f"tm_input_{item_key}")
+        i_table.add_column("SUBJ_ID")
+        i_table.add_column("VISIT_NAME")
+        i_table.add_column("value", transmart.tm_column_md(path, transmart.tm_type.NUMERICAL))
+        tm_tables.append(i_table)
+        column_meta = i_table.column_meta("value")
+
+        #Group by hospital admissions
+        h_groups = m_input.group_by("hadm_id", limited_rows=item_rows)
+        for h_key, h_rows in h_groups.items():
+            i = 0
+            for row in h_rows:
+                subject_id = m_input.get("subject_id", row)
+                hadm_id = m_input.get("hadm_id", row)
+                amount = m_input.get("amount", row)
+                amountuom = m_input.get("amountuom", row)
+                rate = m_input.get("rate", row)
+                rateuom = m_input.get("rateuom", row)
+
+                #Skip null values
+                if amount == "":
+                    continue
+
+                #Skip the entries with different units (3 in total)
+                if amountuom != unit:
+                    continue
+
+                #Load value
+                amount = float(amount)
+                if amount <= 0:#Sometimes there are 0/negative entries in the CareVue database when a rate got set
+                    continue
+
+                #Load datetime
+                datetime = m_input.get("charttime", row)
+                try:
+                    datetime = dt.datetime.strptime(datetime, mimic.time_format)
+                except ValueError:
+                    continue#Skip entries with invalid times
+
+                i_table.add_row([subject_id, hadm_to_visit[hadm_id], amount])
+                column_meta.set_cell_meta(i_table.row_count - 1, transmart.tm_cell_md(f"{i:06}", datetime))
+                i += 1
+
+    log_with_percent("Input data", 1.0)
+    return tm_tables

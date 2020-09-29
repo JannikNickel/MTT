@@ -380,3 +380,96 @@ observation_items = [
     item(227443, "HCO3 (mEq/L)", True),
     item(812, "HCO3 (mEq/L)", True),#Not in dataset
 ]
+
+output_items = [
+    item(40055, "Urine Out Foley (mL)", True),
+    item(226559, "Urine Out Foley (mL)", True),
+
+    item(40054, "Stool Out (mL)", True),
+    item(226579, "Stool Out (mL)", True),
+
+    item(40059, "Oral Gastric (mL)", True),
+    item(226576, "Oral Gastric (mL)", True),
+
+    item(40060, "Pre Admission Out (mL)", True),
+    item(226633, "Pre Admission Out (mL)", True),
+
+    item(40473, "Ileoconduit (mL)", True),
+    item(226584, "Ileoconduit (mL)", True),
+
+    item(40069, "Urine Out Void (mL)", True),
+    item(226560, "Urine Out Void (mL)", True),
+
+    item(40067, "Gastric Emesis (mL)", True),
+    item(226571, "Gastric Emesis (mL)", True),
+
+    item(40076, "Chest Tube #1 (mL)", True),
+    item(226588, "Chest Tube #1 (mL)", True),
+
+    item(41707, "Chest Tube #2 (mL)", True),
+    item(226589, "Chest Tube #2 (mL)", True),
+
+    item(40052, "Nasogastric (mL)", True),
+    item(226575, "Nasogastric (mL)", True),
+
+    item(40286, "Ultrafiltrate (mL)", True),
+    #item(0, "Ultrafiltrate (mL)", True), #No entry in metavision?
+
+    item(41683, "Drain Out JP Lateral (mL)", True),
+    item(226598, "Drain Out JP Lateral (mL)", True),
+
+    item(40926, "Drain Out JP Medial (mL)", True),
+    item(226597, "Drain Out JP Medial (mL)", True),
+    
+    item(40071, "Drain Out JP #1 (mL)", True),
+    item(226599, "Drain Out JP #1 (mL)", True),
+
+    item(40064, "OR Out EBL (mL)", True),
+    item(226626, "OR Out EBL (mL)", True),
+
+    item(40051, "Gastric Tube (mL)", True),
+    item(226573, "Gastric Tube (mL)", True),
+
+    item(40367, "Rectal Tube (mL)", True),
+    item(226583, "Rectal Tube (mL)", True),
+
+    item(40053, "Fecal Bag (mL)", True),
+    item(226580, "Fecal Bag (mL)", True),
+
+    item(46071, "Ostomy Out (mL)", True),
+    item(226582, "Ostomy Out (mL)", True),
+
+    item(40292, "Drain Out T Tube (mL)", True),
+    item(40093, "Drain Out T Tube (mL)", True),
+    item(226603, "Drain Out T Tube (mL)", True),
+
+    item(40061, "OR Urine (mL)", True),
+    item(226627, "OR Urine (mL)", True),
+
+    #item(0, "TF Residual (mL)", True), #No entry in carevue?
+    item(227510, "TF Residual (mL)", True),
+
+    item(46539, "Drainage Bag (mL)", True),
+    item(227701, "Drainage Bag (mL)", True),
+
+    #item(0, "GU Irrigant Volume In (mL)", True), #No entry in carevue?
+    item(227488, "GU Irrigant Volume In (mL)", True),
+
+    item(46449, "GU Irrigant Volume Out (mL)", True),
+    item(42209, "GU Irrigant Volume Out (mL)", True),
+    item(227489, "GU Irrigant Volume Out (mL)", True),
+
+    item(42315, "Pericardial (mL)", True),
+    item(43722, "Pericardial (mL)", True),
+    item(41933, "Pericardial (mL)", True),
+    item(226612, "Pericardial (mL)", True),
+
+    item(40956, "Paracentesis (mL)", True),
+    #item(0, "Paracentesis (mL)", True), # No entry in metavision?
+
+    item(40056, "Drain Out Nephrostomy Lt #1 (mL)", True),
+    item(226564, "Drain Out Nephrostomy Lt #1 (mL)", True),
+
+    item(44676, "Drain Out Nephrostomy Lt #2 (mL)", True),
+    item(226565, "Drain Out Nephrostomy Lt #2 (mL)", True),
+]

@@ -244,6 +244,36 @@ class table():
             writer.writerow([column.name for column in self._columns])
             for row in self._data:
                 writer.writerow(row)
+
+    #Static methods
+    @staticmethod
+    def map_column(src_table, dest_table, src_column, dest_column, transform=None, offset=0):
+        """ Maps a column from one table to a column in another table. If the destination table is smaller than the source table, it will get resized and filled with null rows
+        
+            src_table (table):  The source data table
+
+            dest_table (table): The target data table
+
+            src_column (string):    The name of the source column
+
+            dest_column (string):   The name of the target column
+
+            transform (string->string): An optional function to modify the data while mapping it (Optional)
+
+            offset (int):   The start index in the destination table
+        """
+
+        si = src_table.column_index(src_column)
+        di = dest_table.column_index(dest_column)
+        if si == -1 or di == -1:
+            return
+        #Ensure that |dest_table| >= |src_table|
+        if dest_table._row_count < src_table._row_count + offset:
+            for i in range(src_table._row_count + offset - dest_table._row_count):
+                dest_table.add_row()
+
+        for i in range(src_table._row_count):
+            dest_table._data[i + offset][di] = src_table._data[i][si] if transform == None else transform(src_table._data[i][si])
         
 
 class column():

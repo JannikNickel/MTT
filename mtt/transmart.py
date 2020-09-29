@@ -15,6 +15,9 @@ illegal_path_characters = ["<", ">", ":", "/", "\\", "|", "?", "*"] #For the os 
 visitname_placeholder = "VISITNAME"
 data_label_placeholder = "DATA_LABEL"
 
+#Time series
+create_timeseries_data = True
+
 #Categorical variables
 create_categorical_timeseries = True
 max_categorical_str_len = 16
@@ -48,7 +51,10 @@ def export_study(clinical_tables, mimic_tables):
 
     log_with_percent("Exporting study", 0.35)
     #Split clinical and timeseries data (HDD)
-    clinical_tables, hdd_tables = split_clinical_tables(clinical_tables)
+    if create_timeseries_data == True:
+        clinical_tables, hdd_tables = split_clinical_tables(clinical_tables)
+    else:
+        hdd_tables = []
 
     log_with_percent("Exporting study", 0.4)
     #Create clinical data
@@ -194,7 +200,7 @@ def create_word_map(clinical_tables, mimic_tables):
     try:
         tm_diagnoses = [x for x in clinical_tables if x.name == "tm_diagnoses"][0]
     except:
-        pass
+        tm_diagnoses = None
     if tm_diagnoses != None:
         for i in range(mimic_tables["D_ICD_DIAGNOSES"].row_count):
             tm_word_map_table.add_row([tm_diagnoses.name + file_ending,
