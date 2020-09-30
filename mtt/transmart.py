@@ -20,7 +20,7 @@ create_timeseries_data = True
 
 #Categorical variables
 create_categorical_timeseries = True
-max_categorical_str_len = 32
+max_categorical_str_len = 50
 
 def export_study(clinical_tables, mimic_tables):
     rel_path = cfg.output_path + cfg.study_id + "/"
@@ -60,11 +60,11 @@ def export_study(clinical_tables, mimic_tables):
     #Create platform
     log("Exporting platform")
     platform_name = "ICU"
-    #platform_table = export_platform(rel_path, platform_name, "ICU timeseries data about patients", hdd_tables)
+    platform_table = export_platform(rel_path, platform_name, "ICU timeseries data about patients", hdd_tables)
 
     #Create highdimensional data
     log("Exporting hd data")
-    #export_hdd(rel_path, hdd_tables, platform_name, platform_table)
+    export_hdd(rel_path, hdd_tables, platform_name, platform_table)
     
     log("Export completed!")
     #Return relative export path from the output directory
@@ -348,6 +348,7 @@ def export_hdd(path, hdd_tables, platform_name, platform_table):
         data_table.add_row([platform_table.get("PROBE_NAME", i)])
 
     length_warnings = []
+    max_value_len = 0
     total_neg_values = 0
     for t in hdd_tables:
         subject_id_index = t.column_index("SUBJ_ID")
@@ -409,7 +410,9 @@ def export_hdd(path, hdd_tables, platform_name, platform_table):
                     #Warning if a value is longer than the string length limit
                     if len(categorical_values) > max_categorical_str_len and (not value in length_warnings):
                         length_warnings.append(value)
-                        log(f"The value ({value}) in table ({t.name}) is too long (limit={max_categorical_str_len})", log_type.WARNING)
+                        log(f"The value (|{value}| = {len(categorical_values)}) in table ({t.name}) is too long (limit={max_categorical_str_len})", log_type.WARNING)
+                        if len(categorical_values) > max_value_len:
+                            max_value_len = len(categorical_values)
                     #Write ascii values into the data table
                     for i in range(max_categorical_str_len):
                         data_table[data_column_index, data_table.where_first("ID_REF", categorical_hd_annotation_name(column_name, i))] = categorical_values[i] if i < len(categorical_values) else ""
@@ -423,6 +426,8 @@ def export_hdd(path, hdd_tables, platform_name, platform_table):
     map_table.store(map_file_path, file_delimiter)
     data_table.store(data_file_path, file_delimiter)
     
+    if max_value_len > max_categorical_str_len:
+        log(f"Trimmed {len(length_warnings)} categorical values. Would have required {max_value_len} characters!", log_type.WARNING)
     if total_neg_values > 0:
         log(f"Detected {total_neg_values} negative values!", log_type.WARNING)
 
