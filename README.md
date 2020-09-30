@@ -25,7 +25,7 @@ By default the MIMIC-III tables are expected to be located in the directory `/da
 
 After moving the MIMIC files to the right location, navigate back in the repository directory and run the python program with the command
 
-```python .```
+```python -m mtt```
 
 It's important to run the application from the specified path, because the default configuration uses relative paths, which will only work in that working directory.
 
