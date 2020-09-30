@@ -16,7 +16,7 @@ visitname_placeholder = "VISITNAME"
 data_label_placeholder = "DATA_LABEL"
 
 #Time series
-create_timeseries_data = True
+create_timeseries_data = False
 
 #Categorical variables
 create_categorical_timeseries = True
@@ -60,11 +60,11 @@ def export_study(clinical_tables, mimic_tables):
     #Create platform
     log("Exporting platform")
     platform_name = "ICU"
-    platform_table = export_platform(rel_path, platform_name, "ICU timeseries data about patients", hdd_tables)
+    #platform_table = export_platform(rel_path, platform_name, "ICU timeseries data about patients", hdd_tables)
 
     #Create highdimensional data
     log("Exporting hd data")
-    export_hdd(rel_path, hdd_tables, platform_name, platform_table)
+    #export_hdd(rel_path, hdd_tables, platform_name, platform_table)
     
     log("Export completed!")
     #Return relative export path from the output directory

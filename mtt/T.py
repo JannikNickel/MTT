@@ -231,10 +231,9 @@ def create_lab_data(mimic_tables, hadm_to_subj, hadm_to_visit):
 
     #Group by items
     item_groups = m_lab.group_by("itemid")
+    category_table_dict = {} #Labitems contain duplicate definitions that get mapped to the same path and would cause errors when exporting as clinical data -> Store and write to existing table if required
     #Iterate through the items and create one table for each item
     for item_key in item_groups:
-        log(f"Creating item table {item_key}", log_type.STEP)
-
         #Skip lab items with very few occurrences
         if len(item_groups[item_key]) < 100:
             continue
@@ -243,6 +242,8 @@ def create_lab_data(mimic_tables, hadm_to_subj, hadm_to_visit):
         item_def_row = m_items.where_first("itemid", item_key)
         item_name = m_items.get("label", item_def_row)
         item_fluid = m_items.get("fluid", item_def_row)
+
+        log(f"Creating item table {item_name}", log_type.STEP)
 
         #Determine item type (> 50% numbers => numerical item)
         numerical_value_count = 0
@@ -263,12 +264,21 @@ def create_lab_data(mimic_tables, hadm_to_subj, hadm_to_visit):
                     unit = u
                     break
 
-        #Create table for this item
-        item_table = table("tm_lab_" + item_key)
-        item_table.add_column("SUBJ_ID")
-        item_table.add_column("VISIT_NAME")
-        item_table.add_column("value", transmart.tm_column_md(f"Subjects+Hospital_Stays+{visit_name_path}+Medical+Lab+{item_fluid}+{item_name}", tmtype))
-        tm_lab_tables.append(item_table)
+        #Create or reuse table for this item
+        unit_str = f" ({unit})" if unit != "" else ""
+        category_path = f"Subjects+Hospital_Stays+{visit_name_path}+Medical+Lab+{item_fluid}+{item_name}{unit_str}"
+        is_mapped_table = False
+        if category_path in category_table_dict:#Table for the same category path already exists
+            item_table = category_table_dict[category_path]
+            log(f"Mapping {item_name} to existing table", log_type.STEP)
+            is_mapped_table = True
+        else:#Create new table for this category path and item
+            item_table = table("tm_lab_" + item_key)
+            item_table.add_column("SUBJ_ID")
+            item_table.add_column("VISIT_NAME")
+            item_table.add_column("value", transmart.tm_column_md(category_path, tmtype))
+            category_table_dict[category_path] = item_table
+            tm_lab_tables.append(item_table)
         column_meta = item_table.column_meta("value")
 
         #GROUP the rows of this item by hospital admissions
@@ -277,7 +287,12 @@ def create_lab_data(mimic_tables, hadm_to_subj, hadm_to_visit):
             #Load data entries for this admission
             subj_id = m_lab.get("subject_id", h_rows[0])
             item_id = m_lab.get("itemid", h_rows[0])
+
             i = 0
+            #If mapped table, it already contains definitions for this stay -> Find amount to keep observation id unique
+            if is_mapped_table == True:
+                i = len(item_table.where_value("SUBJ_ID", subj_id))
+
             for h_row in h_rows:
                 #Labevents contains results from external sources (no hadm_id specified) -> Skip those
                 hadm_id = m_lab.get("hadm_id", h_rows[0])
@@ -436,7 +451,7 @@ def create_input_data(mimic_tables, hadm_to_subj, hadm_to_visit):
 
         #Warning if multiple units exists for this item
         if len(units) > 1 or len(rate_units) > 1:
-            log(log_type.WARNING, f"Input Item {item_lbl} ({item_key}) uses multiple units! {len([x for x in units if x != unit])} entries will be skipped")
+            log(f"Input Item {item_lbl} ({item_key}) uses multiple units! {len([x for x in units if x != unit])} entries will be skipped", log_type.WARNING)
 
         #Create a table for this item
         db_path = "CareVue" if is_cv == True else "Metavision"
@@ -486,3 +501,6 @@ def create_input_data(mimic_tables, hadm_to_subj, hadm_to_visit):
 
     log("Input data")
     return tm_tables
+
+def create_prescription_data(mimic_tables, hadm_to_subj, hadm_to_visit):
+    return []
