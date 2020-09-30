@@ -110,6 +110,9 @@ def split_clinical_tables(src_tables):
             elif c >= 2:
                 meta = table.column_meta(table.column_name(c))
                 if type(meta) is tm_column_md:
+                    if create_categorical_timeseries == False and meta.type == tm_type.CATEGORICAL:
+                        fails_criteria = True
+                        break
                     for k in range(table.row_count):
                         cell_meta = meta.get_cell_meta(k)
                         if (not (type(cell_meta) is tm_cell_md)) or (cell_meta.datetime == None):
