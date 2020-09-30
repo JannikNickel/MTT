@@ -5,7 +5,7 @@ from enum import Enum
 from . import config as cfg
 from .params_file import params_file
 from .table import table
-from .log import log, log_type, log_progress_bar, log_with_percent
+from .log import log, log_type, log_progress_bar
 from . import ascii
 
 #Formats
@@ -20,27 +20,24 @@ create_timeseries_data = True
 
 #Categorical variables
 create_categorical_timeseries = True
-max_categorical_str_len = 16
+max_categorical_str_len = 32
 
 def export_study(clinical_tables, mimic_tables):
     rel_path = cfg.output_path + cfg.study_id + "/"
     path = cfg.getcwd() + rel_path
 
-    log_with_percent("Exporting study", 0.0)
+    log("Exporting study")
     #Delete old study folder
     if os.path.exists(path):
         shutil.rmtree(path, ignore_errors=True)
-
-    log_with_percent("Exporting study", 0.1)
+    
     #Create study folder
     if not os.path.exists(path):
         os.makedirs(path)
-
-    log_with_percent("Exporting study", 0.2)
+    
     #Reduce dataset to improve import speed
     reduce_dataset(clinical_tables)
 
-    log_with_percent("Exporting study", 0.3)
     #Create study definition file and backout.params
     study_file = params_file()
     study_file["STUDY_ID"] = cfg.study_id
@@ -49,27 +46,27 @@ def export_study(clinical_tables, mimic_tables):
     study_file.write_to(path + "study.params")
     study_file.write_to(path + "backout.params")#backout is exactly like study.params, so just write the file twice
 
-    log_with_percent("Exporting study", 0.35)
     #Split clinical and timeseries data (HDD)
+    log("Splitting tables")
     if create_timeseries_data == True:
         clinical_tables, hdd_tables = split_clinical_tables(clinical_tables)
     else:
         hdd_tables = []
-
-    log_with_percent("Exporting study", 0.4)
+    
     #Create clinical data
+    log("Exporting clinical data")
     export_clinical(rel_path, clinical_tables, mimic_tables)
 
-    log_with_percent("Exporting study", 0.5)
     #Create platform
+    log("Exporting platform")
     platform_name = "ICU"
-    export_platform(rel_path, platform_name, "ICU timeseries data about patients")
+    platform_table = export_platform(rel_path, platform_name, "ICU timeseries data about patients", hdd_tables)
 
-    log_with_percent("Exporting study", 0.7)
     #Create highdimensional data
-    export_hdd(rel_path, hdd_tables, platform_name)
-
-    log_with_percent("Exporting study", 1.0)
+    log("Exporting hd data")
+    export_hdd(rel_path, hdd_tables, platform_name, platform_table)
+    
+    log("Export completed!")
     #Return relative export path from the output directory
     return rel_path.replace(cfg.output_path, "")
 
@@ -252,8 +249,8 @@ def create_word_map(clinical_tables, mimic_tables):
 
     return tm_word_map_table
 
-def export_platform(path, name, title):
-    organsism = "Homo Sapiens"
+def export_platform(path, name, title, hdd_tables):
+    organism = "Homo Sapiens"
     platform_file_name = "mrna_annotation"
     platform_path = path + platform_file_name + "/"
 
@@ -262,7 +259,7 @@ def export_platform(path, name, title):
     tm_platform["PLATFORM"] = name
     tm_platform["TITLE"] = title
     tm_platform["ANNOTATIONS_FILE"] = name + ".txt"
-    tm_platform["ORGANISM"] = organsism
+    tm_platform["ORGANISM"] = organism
     tm_platform.write_to(path + platform_file_name + ".params")
 
     #Create platform folder
@@ -277,17 +274,36 @@ def export_platform(path, name, title):
     tm_platform_table.add_column("ENTREZ_ID")
     tm_platform_table.add_column("ORGANISM")
 
-    #For now, only define one numeric measurement: measurement
-    tm_platform_table.add_row([name, "measurement", "", "", organsism])
-    #For categorical data, define one measurement for each character: C1, C2, ...
-    if create_categorical_timeseries == True:
-        for i in range(max_categorical_str_len):
-            tm_platform_table.add_row([name, f"char_{i}", "", "", organsism])
+    #Define platform examinations based on variables in hd tables
+    required_variables = []
+    for t in hdd_tables:
+        for k in range(t.column_count):
+            column_name = t.column_name(k)
+            if column_name != "SUBJ_ID" and column_name != "VISIT_NAME":
+                column_type = t.column_meta(column_name).type
+                if not (column_name, column_type) in required_variables:
+                    required_variables.append((column_name, column_type))
+    
+    for var in required_variables:
+        log(f"Adding variable {var[0]} ({var[1]}) to platform", log_type.STEP)
+        if var[1] == tm_type.NUMERICAL:
+            tm_platform_table.add_row([name, f"{numerical_hd_annotation_name(var[0])}", "", "", organism])
+        elif var[1] == tm_type.CATEGORICAL:
+            for i in range(max_categorical_str_len):
+                tm_platform_table.add_row([name, f"{categorical_hd_annotation_name(var[0], i)}", "", "", organism])
 
     #Store platform definition table
     tm_platform_table.store(platform_path + name + ".txt", file_delimiter)
 
-def export_hdd(path, hdd_tables, platform_name):
+    return tm_platform_table
+
+def numerical_hd_annotation_name(column_name):
+    return "n_" + column_name
+
+def categorical_hd_annotation_name(column_name, char):
+    return "c_" + column_name + "_" + str(char)
+
+def export_hdd(path, hdd_tables, platform_name, platform_table):
     hdd_folder_path = path + "expression/"
     map_file_name = "subjectsamplemapping"
     map_file_path = hdd_folder_path + map_file_name + file_ending
@@ -324,56 +340,81 @@ def export_hdd(path, hdd_tables, platform_name):
     #Create data table
     data_table = table(data_file_name)
     data_table.add_column("ID_REF")
-    #Default numeric probe
-    data_table.add_row(["measurement"])
-    #Categorical probe
-    if create_categorical_timeseries == True:
-        for i in range(max_categorical_str_len):
-            data_table.add_row([f"char_{i}"])
+    #Add rows from the platform definition
+    for i in range(platform_table.row_count):
+        data_table.add_row([platform_table.get("PROBE_NAME", i)])
 
+    length_warnings = []
     total_neg_values = 0
     for t in hdd_tables:
         subject_id_index = t.column_index("SUBJ_ID")
         visit_name_index = t.column_index("VISIT_NAME")
-        value_index = t.column_index("value")
-        value_meta = t.column_meta("value")
-        table_type = value_meta.type
+        log(f"Exporting hd table {t.name}", log_type.STEP)
+
         subj_id_dict = {}
         for row in range(t.row_count):
-            #Create sample
+            #Each table row is a sample -> Create sample for this row
             subject = t[subject_id_index, row]
             if not subject in subj_id_dict:
                 subj_id_dict[subject] = 0
 
-            cd = value_meta.category.replace(visitname_placeholder, t[visit_name_index, row])#Replace visit name placeholder by value
-            sample_id = f"{t.name}_S{subject}_S{subj_id_dict[subject]}"
-            map_table.add_row([cfg.study_id, "", subject, sample_id, platform_name, "", "", str(value_meta.get_cell_meta(row).datetime), cd, ""])
+            #Find category (Tables are either one data column with tm_column_meta or multiple columns with tm_partial_column_meta)
+            column_meta = None
+            for c in range(t.column_count):
+                if c == subject_id_index or c == visit_name_index:
+                    continue
+                column_meta = t.column_meta(t.column_name(c))
+                if column_meta != None:
+                    break
 
+            #No meta data -> invalid
+            if type(column_meta) != tm_column_md and type(column_meta) != tm_partial_column_md:
+                continue
+
+            #Create sample mapping entry
+            cd = column_meta.category.replace(visitname_placeholder, t[visit_name_index, row])#Replace visit name placeholder by value
+            sample_id = f"{t.name}_S{subject}_S{subj_id_dict[subject]}" #global unique sampleid = table_subject_probe_id
+            map_table.add_row([cfg.study_id, "", subject, sample_id, platform_name, "", "", str(column_meta.get_cell_meta(row).datetime), cd, ""])
+
+            #Increase id for each subject's probe of this type
             subj_id_dict[subject] += 1
 
-            #Fill data
-            value = t[value_index, row]
-            data_table.add_column(sample_id)
+            #Fill annotation rows for this sample (fill sample data table)
+            for c in range(t.column_count):
+                #Skip subject and visit name columns
+                if c == subject_id_index or c == visit_name_index:
+                    continue
 
-            #Numerical data
-            data_table[data_table.column_count - 1, 0] = value if table_type == tm_type.NUMERICAL else -1
+                column_name = t.column_name(c)
+                column_meta = t.column_meta(column_name)
 
-            #Negative values are being used for missing values, so always ensure that no valid negative values are in the dataset
-            #In case that happens, the values of the type of measurement have to be shifted to a new positive range (Shouldnt happen, because measurements are usually in positive ranges)
-            if table_type == tm_type.NUMERICAL:
-                if value < 0:
-                    log(f"table {t.name} contains negative value {value}!", log_type.WARNING)
-                    total_neg_values += 1
+                #Load value
+                value = t[c, row]
+                data_table.add_column(sample_id)
+                data_column_index = data_table.column_count - 1
 
-            #Fill categorical data
-            if create_categorical_timeseries == True:
-                categorical_values = ascii.str_to_ascii_array(value) if table_type == tm_type.CATEGORICAL else []
-                if len(categorical_values) > max_categorical_str_len:
-                    log(f"The value ({value}) in table ({t.name}) is too long (limit={max_categorical_str_len})", log_type.WARNING)
-                while(len(categorical_values) < max_categorical_str_len):
-                    categorical_values.append(str(-1))
-                for i in range(1, max_categorical_str_len + 1):
-                    data_table[data_table.column_count - 1, i] = categorical_values[i - 1]
+                if column_meta.type == tm_type.NUMERICAL:
+                    #Negative values are being used for missing values, so always ensure that no valid negative values are in the dataset
+                    #In case that happens, the values of the type of measurement have to be shifted to a new positive range (Shouldnt happen, because measurements are usually in positive ranges)
+                    if float(value) < 0:
+                        log(f"table {t.name} contains negative value {value}!", log_type.WARNING)
+                        total_neg_values += 1
+                    data_table[data_column_index, data_table.where_first("ID_REF", numerical_hd_annotation_name(column_name))] = value
+                elif column_meta.type == tm_type.CATEGORICAL:
+                    #Categorical value to ascii array
+                    categorical_values = ascii.str_to_ascii_array(value)
+                    #Warning if a value is longer than the string length limit
+                    if len(categorical_values) > max_categorical_str_len and (not value in length_warnings):
+                        length_warnings.append(value)
+                        log(f"The value ({value}) in table ({t.name}) is too long (limit={max_categorical_str_len})", log_type.WARNING)
+                    #Write ascii values into the data table
+                    for i in range(max_categorical_str_len):
+                        data_table[data_column_index, data_table.where_first("ID_REF", categorical_hd_annotation_name(column_name, i))] = categorical_values[i] if i < len(categorical_values) else ""
+
+                #Empty cells are not allowed -> Fill them with -1 to ignore them during the import
+                for i in range(data_table.row_count):
+                    if data_table[data_column_index, i] == "":
+                        data_table[data_column_index, i] = "-1"
 
     #Save tables
     map_table.store(map_file_path, file_delimiter)

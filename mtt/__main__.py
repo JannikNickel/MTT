@@ -3,7 +3,7 @@ import os
 import ctypes
 
 from . import config as cfg
-from .log import log, log_type, log_with_percent
+from .log import log, log_type
 from .table import table
 from . import mimic
 from . import transmart

@@ -1,5 +1,5 @@
 from . import config as cfg
-from .log import log, log_type, log_with_percent
+from .log import log, log_type
 from .table import table
 from . import mimic
 from . import transmart
@@ -161,7 +161,7 @@ def load_value_entry(source_table: table, row: int, source_column: str, is_numer
     return (value, datetime)
 
 def create_item_def_tables_task(task_name, mimic_table, hadm_to_subj, hadm_to_visit, item_definitions, table_base_name, value_category_path, time_column_name, error_column_name):
-    log_with_percent(task_name, 0.0)
+    log(task_name)
     tm_tables = []
 
     #GROUP by mapped item ids (MIMIC-III id -> tranSMART target name)
@@ -173,10 +173,8 @@ def create_item_def_tables_task(task_name, mimic_table, hadm_to_subj, hadm_to_vi
     item_groups.pop("Unmapped", None)#Remove unmapped data
 
     #Iterate through target items
-    group_progress = 0
     for item_key in item_groups:
-        group_progress += 1
-        log_with_percent(task_name, min((group_progress / float(len(item_groups))), 0.999))
+        log(f"Creating item table {item_key}", log_type.STEP)
 
         item_def = [x for x in item_definitions if x.target == item_key][0]
 
@@ -211,8 +209,7 @@ def create_item_def_tables_task(task_name, mimic_table, hadm_to_subj, hadm_to_vi
                 item_table.add_row([subj_id, hadm_to_visit[hadm_id], value])
                 column_meta.set_cell_meta(item_table.row_count - 1, transmart.tm_cell_md(f"{i:06}", datetime))
                 i += 1
-
-    log_with_percent(task_name, 1.0)
+    
     return tm_tables
 
 def create_observations_data(mimic_tables, hadm_to_subj, hadm_to_visit):
@@ -227,7 +224,7 @@ def create_observations_data(mimic_tables, hadm_to_subj, hadm_to_visit):
         "error")
 
 def create_lab_data(mimic_tables, hadm_to_subj, hadm_to_visit):
-    log_with_percent("Lab data", 0.0)
+    log("Lab data")
     m_lab = mimic_tables["LABEVENTS"]
     m_items = mimic_tables["D_LABITEMS"]
     tm_lab_tables = []
@@ -235,10 +232,8 @@ def create_lab_data(mimic_tables, hadm_to_subj, hadm_to_visit):
     #Group by items
     item_groups = m_lab.group_by("itemid")
     #Iterate through the items and create one table for each item
-    group_progress = 0
     for item_key in item_groups:
-        log_with_percent("Lab data", group_progress / float(len(item_groups)))
-        group_progress += 1
+        log(f"Creating item table {item_key}", log_type.STEP)
 
         #Skip lab items with very few occurrences
         if len(item_groups[item_key]) < 100:
@@ -299,7 +294,7 @@ def create_lab_data(mimic_tables, hadm_to_subj, hadm_to_visit):
                 column_meta.set_cell_meta(item_table.row_count - 1, transmart.tm_cell_md(f"{i:06}", datetime))
                 i += 1
             
-    log_with_percent("Lab data", 1.0)
+    log("Lab data")
     return tm_lab_tables
 
 def create_icu_stay_data(mimic_tables, hadm_to_subj, hadm_to_visit):
@@ -414,15 +409,13 @@ def create_input_data(mimic_tables, hadm_to_subj, hadm_to_visit):
             table.map_column(m_carevue, m_input, cv_column, column, None, 0)
             table.map_column(m_metavision, m_input, mv_column, column, None, m_carevue.row_count)
 
-    log_with_percent("Input data", 0.0)
+    log("Input data")
     m_items = mimic_tables["D_ITEMS"]
     tm_tables = []
     #GROUP by item
     item_groups = m_input.group_by("itemid").items()
-    group_progress = 0
     for item_key, item_rows in item_groups:
-        log_with_percent("Input data", group_progress / float(len(item_groups)))
-        group_progress += 1
+        log(f"Creating item table {item_key}", log_type.STEP)
 
         #Skip items with less than 100 entries
         if len(item_rows) < 100:
@@ -491,5 +484,5 @@ def create_input_data(mimic_tables, hadm_to_subj, hadm_to_visit):
                 column_meta.set_cell_meta(i_table.row_count - 1, transmart.tm_cell_md(f"{i:06}", datetime))
                 i += 1
 
-    log_with_percent("Input data", 1.0)
+    log("Input data")
     return tm_tables
