@@ -5,7 +5,7 @@ The purpose of this repository is to demonstrate the ETL process for integrating
 ## Content
 The directory `mtt` represents a python module that reads MIMIC tables, transforms and exports them in a format that is readable by the import tool TranSMART-batch [3].
 
-The directory `data/output` contains a transformed result of the application, which can be imported into TranSMART. The required `study.params` and `clinical.params` definition files, which are required to import the dataset, are located in the subdirectory `data/MIMIC3_DEMO/` and the column mapping and data files are can be found in the directory `data/MIMIC3_DEMO/clinical/`. By default, the MIMIC-III tables will be loaded from the data directory, too. (Not included in this repository, link in the references).
+The directory `data/output/` contains a transformed result of the application, which can be imported into TranSMART. The required `study.params` and `clinical.params` definition files, which are required to import the dataset, are located in the subdirectory `data/output/MIMIC3_DEMO/` alongside with all other required data definitions. By default, the MIMIC-III tables will be loaded from the data directory, too. (Not included in this repository, link in the references).
 
 ## Running the module
 
