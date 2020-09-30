@@ -498,9 +498,54 @@ def create_input_data(mimic_tables, hadm_to_subj, hadm_to_visit):
                 i_table.add_row([subject_id, hadm_to_visit[hadm_id], amount])
                 column_meta.set_cell_meta(i_table.row_count - 1, transmart.tm_cell_md(f"{i:06}", datetime))
                 i += 1
-
-    log("Input data")
+    
     return tm_tables
 
 def create_prescription_data(mimic_tables, hadm_to_subj, hadm_to_visit):
-    return []
+    log("Prescription data")
+    m_pre = mimic_tables["PRESCRIPTIONS"]
+
+    tm_table = table("tm_prescriptions")
+    path = f"Subjects+Hospital_Stays+{visit_name_path}+Medical+Prescriptions"
+    tm_table.add_column("SUBJ_ID")
+    tm_table.add_column("VISIT_NAME")
+    #It's easier to display one categorical value for each time point
+    tm_table.add_column("value", transmart.tm_column_md(path, transmart.tm_type.CATEGORICAL))
+    #tm_table.add_column("Drug", transmart.tm_column_md(path, transmart.tm_type.CATEGORICAL))
+    #tm_table.add_column("Dose", transmart.tm_column_md(path, transmart.tm_type.NUMERICAL))
+    #tm_table.add_column("Dose Unit", transmart.tm_column_md(path, transmart.tm_type.CATEGORICAL))
+    value_meta = tm_table.column_meta("value")
+
+    #Group by stay
+    stay_groups = m_pre.group_by("hadm_id")
+    for stay_key, stay_rows in stay_groups.items():
+        i = 0
+        for row in stay_rows:
+            subj_id = m_pre.get("subject_id", row)
+            hadm_id = m_pre.get("hadm_id", row)
+            drug_name = m_pre.get("drug", row)
+            drug_dose = m_pre.get("dose_val_rx", row)
+            drug_unit = m_pre.get("dose_unit_rx", row)#Never null
+
+            #drug_dose can either be a number or a range (num1-num2)
+            #There are no negative values, so the - symbol can be used to identify ranges
+            if "-" in drug_dose: #Range
+                drug_dose = drug_dose.split("-")[0] #Use min range value
+
+            #Skip entries with non numeric dose
+            if drug_dose.replace('.', '', 1).replace('-', '', 1).isdigit() == False:
+                continue
+
+            #Load datetime
+            datetime = m_pre.get("startdate", row)
+            try:
+                datetime = dt.datetime.strptime(datetime, mimic.time_format)
+            except ValueError:
+                continue#Skip entries with invalid times
+
+            value = f"{drug_name} ({drug_dose} {drug_unit})"
+            tm_table.add_row([subj_id, hadm_to_visit[hadm_id], value])
+            value_meta.set_cell_meta(tm_table.row_count - 1, transmart.tm_cell_md(f"{i:06}", datetime))
+            i += 1
+
+    return tm_table

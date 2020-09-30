@@ -16,7 +16,7 @@ visitname_placeholder = "VISITNAME"
 data_label_placeholder = "DATA_LABEL"
 
 #Time series
-create_timeseries_data = False
+create_timeseries_data = True
 
 #Categorical variables
 create_categorical_timeseries = True
