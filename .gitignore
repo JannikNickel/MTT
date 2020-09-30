@@ -1,4 +1,4 @@
-*/secrets.py
-data/*
+data/input/*
+data/output/*
 */__pycache__/*
 */.ropeproject/*
