@@ -110,7 +110,7 @@ class item():
 #Item merge definitions
 observation_items = [
     item(220045, "Heart Rate (bpm)", True, None, (0, 250), "value"),
-    item(211, "Heart Rate (bpm)", True, None, (0, 250, "value")),
+    item(211, "Heart Rate (bpm)", True, None, (0, 250), "value"),
 
     item(220048, "Heart Rythm", False, heart_rythm, "value"),
     item(212, "Heart Rythm", False, None, "value"),
