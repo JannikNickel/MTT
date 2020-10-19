@@ -109,8 +109,8 @@ class item():
 
 #Item merge definitions
 observation_items = [
-    #item(220045, "Heart Rate (bpm)", True, None, (0, 250), "value"),
-    #item(211, "Heart Rate (bpm)", True, None, (0, 250), "value"),
+    item(220045, "Heart Rate (bpm)", True, None, (0, 250), "value"),
+    item(211, "Heart Rate (bpm)", True, None, (0, 250), "value"),
 
     item(220210, "Respiratory Rate (insp/min)", True),
     item(618, "Respiratory Rate (insp/min)", True),
