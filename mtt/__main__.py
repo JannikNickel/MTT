@@ -71,17 +71,17 @@ tm_tables += [T.create_procedures_data(mimic_tables, hadm_to_subj, hadm_to_visit
 #Observation data
 tm_tables += T.create_observations_data(mimic_tables, hadm_to_subj, hadm_to_visit)
 #Lab data
-tm_tables += T.create_lab_data(mimic_tables, hadm_to_subj, hadm_to_visit)
+#tm_tables += T.create_lab_data(mimic_tables, hadm_to_subj, hadm_to_visit)
 #ICU stays data
-tm_tables += [T.create_icu_stay_data(mimic_tables, hadm_to_subj, hadm_to_visit)]
+#tm_tables += [T.create_icu_stay_data(mimic_tables, hadm_to_subj, hadm_to_visit)]
 #Services data
-tm_tables += [T.create_services_data(mimic_tables, hadm_to_subj, hadm_to_visit)]
+#tm_tables += [T.create_services_data(mimic_tables, hadm_to_subj, hadm_to_visit)]
 #Output data
-tm_tables += T.create_output_data(mimic_tables, hadm_to_subj, hadm_to_visit)
+#tm_tables += T.create_output_data(mimic_tables, hadm_to_subj, hadm_to_visit)
 #Input data
-tm_tables += T.create_input_data(mimic_tables, hadm_to_subj, hadm_to_visit)
+#tm_tables += T.create_input_data(mimic_tables, hadm_to_subj, hadm_to_visit)
 #Prescription data
-tm_tables += [T.create_prescription_data(mimic_tables, hadm_to_subj, hadm_to_visit)]
+#tm_tables += [T.create_prescription_data(mimic_tables, hadm_to_subj, hadm_to_visit)]
 
 
 ###############################################################################

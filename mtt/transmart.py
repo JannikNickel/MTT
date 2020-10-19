@@ -20,7 +20,7 @@ create_timeseries_data = True
 
 #Categorical variables
 create_categorical_timeseries = True
-max_categorical_str_len = 50
+max_categorical_str_len = 13
 
 def export_study(clinical_tables, mimic_tables):
     rel_path = cfg.output_path + cfg.study_id + "/"

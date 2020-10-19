@@ -5,12 +5,12 @@ mimic_path = "data/input/mimic-iii-clinical-database-demo-1.4/"
 output_path = "data/output/"
 
 #Study settings
-study_id = "MIMIC3_DEMO"
+study_id = "MIMIC3_MIN"
 study_protected = False
 study_top_node = "\\Public Studies\\" + study_id
 
 #Data settings
-first_visit_only = False
+first_visit_only = True
 
 def getcwd():
     return os.getcwd() + "/"
