@@ -307,6 +307,12 @@ def categorical_hd_annotation_name(column_name, char):
     return "c_" + column_name + "_" + str(char)
 
 def export_hdd(path, hdd_tables, platform_name, platform_table):
+    #Stats
+    observations_count = 0
+    sample_count = 0
+    measurement_count = 0
+    invalid_count = 0
+
     hdd_folder_path = path + "expression/"
     map_file_name = "subjectsamplemapping"
     map_file_path = hdd_folder_path + map_file_name + file_ending
@@ -351,6 +357,7 @@ def export_hdd(path, hdd_tables, platform_name, platform_table):
     max_value_len = 0
     total_neg_values = 0
     for t in hdd_tables:
+        observations_count += 1
         subject_id_index = t.column_index("SUBJ_ID")
         visit_name_index = t.column_index("VISIT_NAME")
         log(f"Exporting hd table {t.name}", log_type.STEP)
@@ -376,8 +383,9 @@ def export_hdd(path, hdd_tables, platform_name, platform_table):
                 continue
 
             #Create sample mapping entry
+            sample_count += 1
             cd = column_meta.category.replace(visitname_placeholder, t[visit_name_index, row])#Replace visit name placeholder by value
-            sample_id = f"{t.name}_S{subject}_S{subj_id_dict[subject]}" #global unique sampleid = table_subject_probe_id
+            sample_id = f"{t.name.replace('_', ' ')}_S{subject}_S{subj_id_dict[subject]}" #global unique sampleid = table_subject_probe_id
             map_table.add_row([cfg.study_id, "", subject, sample_id, platform_name, "", "", str(column_meta.get_cell_meta(row).datetime), cd, ""])
 
             #Increase id for each subject's probe of this type
@@ -419,17 +427,26 @@ def export_hdd(path, hdd_tables, platform_name, platform_table):
 
                 #Empty cells are not allowed -> Fill them with -1 to ignore them during the import
                 for i in range(data_table.row_count):
+                    measurement_count += 1
                     if data_table[data_column_index, i] == "":
                         data_table[data_column_index, i] = "-1"
+                        invalid_count += 1
 
     #Save tables
     map_table.store(map_file_path, file_delimiter)
     data_table.store(data_file_path, file_delimiter)
     
+    #Warnings
     if max_value_len > max_categorical_str_len:
         log(f"Trimmed {len(length_warnings)} categorical values. Would have required {max_value_len} characters!", log_type.WARNING)
     if total_neg_values > 0:
         log(f"Detected {total_neg_values} negative values!", log_type.WARNING)
+
+    #Stats
+    log(f"Observations = {observations_count}")
+    log(f"Samples = {sample_count}")
+    log(f"Measurements = {measurement_count}")
+    log(f"-1.0 Values = {invalid_count}")
 
 
 class tm_type(Enum):

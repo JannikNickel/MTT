@@ -1,6 +1,7 @@
 import time
 import os
 import ctypes
+from zipfile import ZipFile, ZIP_DEFLATED
 
 from . import config as cfg
 from .log import log, log_type
@@ -10,8 +11,6 @@ from . import transmart
 from . import transform
 from . import num_str_utils
 from . import T
-from . import tm_upload
-from . import secrets
 
 #Switch console mode to allo ansi escape sequences on windows
 if os.name == "nt":
@@ -19,6 +18,7 @@ if os.name == "nt":
     kernel32.SetConsoleMode(kernel32.GetStdHandle(-11), 7)
 
 log(">>>>>>>>>>>>>>>>>>>> MTT <<<<<<<<<<<<<<<<<<<<")
+start_time = time.time()
 
 ###############################################################################
 # Load MIMIC tables                                                           #
@@ -88,23 +88,17 @@ tm_tables += [T.create_prescription_data(mimic_tables, hadm_to_subj, hadm_to_vis
 # Export                                                                      #
 ###############################################################################
 log(">>> Export")
+#Write data
 rel_export_path = transmart.export_study(tm_tables, mimic_tables)
 
+#Create study zip file
+compressed_path = cfg.output_path + rel_export_path.rstrip("/") + ".zip"
+study_path = cfg.output_path + rel_export_path
+log("Compressing dataset...", log_type.INFO)
+with ZipFile(compressed_path, "w", ZIP_DEFLATED) as zip:
+    for dir_name, subdirs, files in os.walk(study_path):
+        for file in files:
+            file_path = os.path.join(dir_name, file)
+            zip.write(file_path, file_path.replace(cfg.output_path, ""))
 
-###############################################################################
-# Upload                                                                      #
-###############################################################################
-log(">>> Do you want to upload the dataset to transmart? [y/n/f/h] (yes/no/full/home)")
-upload_answer = input()
-if upload_answer == "Y" or upload_answer == "y":
-    tm_upload.upload_data(rel_export_path)
-elif upload_answer == "F" or upload_answer == "f":
-    secrets.tmserver_address = secrets.tm_fullserver_address
-    secrets.tmserver_user = secrets.tm_fullserver_user
-    secrets.tmserver_password = secrets.tm_fullserver_password
-    tm_upload.upload_data(rel_export_path)
-elif upload_answer == "H" or upload_answer == "h":
-    secrets.tmserver_address = secrets.tm_homeserver_address
-    secrets.tmserver_user = secrets.tm_homeserver_user
-    secrets.tmserver_password = secrets.tm_homeserver_password
-    tm_upload.upload_data(rel_export_path)
+log(f"Duration = {time.time() - start_time}s")
