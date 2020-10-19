@@ -17,7 +17,7 @@ In addition, the following modules are required:
 All other used modules should be part of the Python 3 standard library.
 
 ### Execution
-To successfully execute the module and generate a TranSMART dataset you have to clone this repository and download the MIMIC-III demo dataset (link in the references).
+To successfully run the module and generate a tranSMART dataset you have to clone this repository and download the MIMIC-III demo dataset (link in the references).
 
 The first step is to navigate in the directory of the cloned repository.
 By default the MIMIC-III tables are expected to be located in the directory `/data/input/mimic-iii-clinical-database-demo-1.4/` as `.csv` files. The path can be changed as described later on.
