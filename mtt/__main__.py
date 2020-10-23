@@ -32,25 +32,17 @@ mimic_tables = mimic3.tables
 ###############################################################################
 log(">>> Preparation")
 
-#Transmart sorts values lexicographically -> fill with zeros to have length lexicographically order
-transmart_visit_name_values = [f"{(i + 1):02}" for i in range(99)]
-
-#Mapping from hadm_id to visit number and hadm_id to patient
-#In the mimic tables the hadm_id is a unique value. In transmart the visit has to be an ascending number for each patient
-#-> Create helper dictionaries to map each visit id to a number and to map each visit id to the patient
 hadm_to_visit = {}
 hadm_to_subj = {}
-admissions_subj_index = mimic_tables["ADMISSIONS"].column_index("subject_id")
-admissions_hadm_index = mimic_tables["ADMISSIONS"].column_index("hadm_id")
 for i in range(mimic_tables["ADMISSIONS"].row_count):
     visit_num = 0
-    subj_id = mimic_tables["ADMISSIONS"][admissions_subj_index, i]
-    hadm_id = mimic_tables["ADMISSIONS"][admissions_hadm_index, i]
+    subj_id = mimic_tables["ADMISSIONS"].get("subject_id", i)
+    hadm_id = mimic_tables["ADMISSIONS"].get("hadm_id", i)
     for k in range(i - 1, 0, -1):
-        if mimic_tables["ADMISSIONS"][admissions_subj_index, k] == subj_id:
+        if mimic_tables["ADMISSIONS"].get("subject_id", k) == subj_id:
             visit_num += 1
 
-    hadm_to_visit[hadm_id] = str(transmart_visit_name_values[visit_num])
+    hadm_to_visit[hadm_id] = str(f"{(visit_num + 1):02}")
     if not hadm_id in hadm_to_subj:
         hadm_to_subj[hadm_id] = subj_id
 
