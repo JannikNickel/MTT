@@ -1,6 +1,6 @@
 # MTT
 
-The purpose of this repository is to demonstrate the ETL process for integrating the MIMIC-III Demo [1] intensive care data into a docker-based TranSMART 16.2 instance [2] using the HD-Data format to represent time series data.
+The purpose of this repository is to demonstrate the ETL process for integrating the MIMIC-III Demo [1] intensive care data into a tranSMART instance with the ETL import tool tranSMART-batch [2] using the highdimensional data format to represent time series data.
 
 ## Content
 The directory `mtt` represents a python module that reads MIMIC tables, transforms and exports them in a format that is readable by the import tool TranSMART-batch [2].
