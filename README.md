@@ -48,7 +48,7 @@ Below is a short description of all source files in the python module.
 | num_str_utils.py| Helper methods to convert numbers to strings |
 | params_file.py  | Create/read/write `.params` files (each line: key=value). The files are required for study definitions |
 | T.py            | Contains all functions to transform the MIMIC-III tables into data tables for the import in tranSMART |
-| table.py        | A class to create/load/write/copy/modify 2 dimensional table data in various ways as well as definining and generating meta data about columns (data type, number different values, hierarchy path, ...). All methods are documented in the source file. |
+| table.py        | A class to create/load/write/copy/modify 2 dimensional table data in various ways as well as definining and generating meta data about columns (data type, number different values, hierarchy path, ...). |
 | transform.py    | Contains helper functions to calculate differences between datetimes, ... |
 | transmart.py    | Transformes the generated data tables into the required format for tranSMART-batch and writes the study folder |
 
